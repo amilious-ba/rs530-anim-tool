@@ -131,9 +131,15 @@ private fun fitDistance(model: Rs2Model): Double {
 
 private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
     data class Tri(val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
-    val minY = model.verticesY.minOrNull() ?: 0
-    val maxY = model.verticesY.maxOrNull() ?: 1
-    val spanY = (maxY - minY).coerceAtLeast(1).toFloat()
+    val minX = (model.verticesX.minOrNull() ?: 0).toFloat()
+    val maxX = (model.verticesX.maxOrNull() ?: 1).toFloat()
+    val minY = (model.verticesY.minOrNull() ?: 0).toFloat()
+    val maxY = (model.verticesY.maxOrNull() ?: 1).toFloat()
+    val minZ = (model.verticesZ.minOrNull() ?: 0).toFloat()
+    val maxZ = (model.verticesZ.maxOrNull() ?: 1).toFloat()
+    val spanX = (maxX - minX).coerceAtLeast(1f)
+    val spanY = (maxY - minY).coerceAtLeast(1f)
+    val spanZ = (maxZ - minZ).coerceAtLeast(1f)
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
         val tex = model.faceTextures?.getOrNull(i)?.toInt()?.and(0xFFFF) ?: 0xFFFF
@@ -149,20 +155,40 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         var f = 0
         var vi = 0
         var ti = 0
-        fun put(index: Int) {
+        fun put(index: Int, u: Float, v: Float) {
             points[p++] = model.verticesX[index].toFloat()
             points[p++] = model.verticesY[index].toFloat()
             points[p++] = model.verticesZ[index].toFloat()
-            val u = (kotlin.math.atan2(
-                model.verticesX[index].toDouble(),
-                model.verticesZ[index].toDouble(),
-            ) / (2.0 * Math.PI) + 0.5).toFloat()
-            val v = (model.verticesY[index] - minY) / spanY
             uvs[t++] = u
-            uvs[t++] = v.coerceIn(0f, 1f)
+            uvs[t++] = v
         }
         for (tri in group) {
-            put(tri.a); put(tri.b); put(tri.c)
+            val ax = model.verticesX[tri.a].toFloat()
+            val ay = model.verticesY[tri.a].toFloat()
+            val az = model.verticesZ[tri.a].toFloat()
+            val nx = (model.verticesY[tri.b] - model.verticesY[tri.a]) * (model.verticesZ[tri.c] - model.verticesZ[tri.a]) -
+                (model.verticesY[tri.c] - model.verticesY[tri.a]) * (model.verticesZ[tri.b] - model.verticesZ[tri.a])
+            val ny = (model.verticesZ[tri.b] - model.verticesZ[tri.a]) * (model.verticesX[tri.c] - model.verticesX[tri.a]) -
+                (model.verticesZ[tri.c] - model.verticesZ[tri.a]) * (model.verticesX[tri.b] - model.verticesX[tri.a])
+            val nz = (model.verticesX[tri.b] - model.verticesX[tri.a]) * (model.verticesY[tri.c] - model.verticesY[tri.a]) -
+                (model.verticesX[tri.c] - model.verticesX[tri.a]) * (model.verticesY[tri.b] - model.verticesY[tri.a])
+            val anx = kotlin.math.abs(nx)
+            val any = kotlin.math.abs(ny)
+            val anz = kotlin.math.abs(nz)
+            fun uv(index: Int): Pair<Float, Float> {
+                val x = model.verticesX[index].toFloat()
+                val y = model.verticesY[index].toFloat()
+                val z = model.verticesZ[index].toFloat()
+                return when {
+                    anx >= any && anx >= anz -> (z - minZ) / spanZ to (y - minY) / spanY
+                    any >= anx && any >= anz -> (x - minX) / spanX to (z - minZ) / spanZ
+                    else -> (x - minX) / spanX to (y - minY) / spanY
+                }
+            }
+            val ua = uv(tri.a); val ub = uv(tri.b); val uc = uv(tri.c)
+            put(tri.a, ua.first, ua.second)
+            put(tri.b, ub.first, ub.second)
+            put(tri.c, uc.first, uc.second)
             faces[f++] = vi++; faces[f++] = ti++
             faces[f++] = vi++; faces[f++] = ti++
             faces[f++] = vi++; faces[f++] = ti++
