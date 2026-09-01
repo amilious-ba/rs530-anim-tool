@@ -37,6 +37,73 @@ data class Rs2Model(
         return boneVertices[label].size
     }
 
+    /** Concatenate another mesh (NPC multi-model). Labels stay as stored. */
+    fun attach(other: Rs2Model): Rs2Model {
+        val vc = vertexCount + other.vertexCount
+        val fc = faceCount + other.faceCount
+        val vx = verticesX.copyOf(vc)
+        val vy = verticesY.copyOf(vc)
+        val vz = verticesZ.copyOf(vc)
+        other.verticesX.copyInto(vx, vertexCount)
+        other.verticesY.copyInto(vy, vertexCount)
+        other.verticesZ.copyInto(vz, vertexCount)
+        val fa = faceA.copyOf(fc)
+        val fb = faceB.copyOf(fc)
+        val fcA = faceC.copyOf(fc)
+        for (i in 0 until other.faceCount) {
+            fa[faceCount + i] = other.faceA[i] + vertexCount
+            fb[faceCount + i] = other.faceB[i] + vertexCount
+            fcA[faceCount + i] = other.faceC[i] + vertexCount
+        }
+        val colors = ShortArray(fc)
+        faceColors.copyInto(colors)
+        other.faceColors.copyInto(colors, faceCount)
+        val textures = if (faceTextures == null && other.faceTextures == null) {
+            null
+        } else {
+            ShortArray(fc) { i ->
+                if (i < faceCount) {
+                    faceTextures?.getOrNull(i) ?: -1
+                } else {
+                    other.faceTextures?.getOrNull(i - faceCount) ?: -1
+                }
+            }
+        }
+        val vBones = when {
+            vertexBones == null && other.vertexBones == null -> null
+            else -> {
+                val out = IntArray(vc)
+                vertexBones?.copyInto(out)
+                other.vertexBones?.copyInto(out, vertexCount)
+                out
+            }
+        }
+        val tBones = when {
+            triangleBones == null && other.triangleBones == null -> null
+            else -> {
+                val out = IntArray(fc)
+                triangleBones?.copyInto(out)
+                other.triangleBones?.copyInto(out, faceCount)
+                out
+            }
+        }
+        return Rs2Model(
+            format = "$format+${other.format}",
+            vertexCount = vc,
+            faceCount = fc,
+            verticesX = vx,
+            verticesY = vy,
+            verticesZ = vz,
+            faceA = fa,
+            faceB = fb,
+            faceC = fcA,
+            faceColors = colors,
+            faceTextures = textures,
+            vertexBones = vBones,
+            triangleBones = tBones,
+        )
+    }
+
     private fun buildBoneVertices(): Array<IntArray> {
         if (vertexBones == null || vertexBones.isEmpty()) return emptyArray()
         val counts = IntArray(256)

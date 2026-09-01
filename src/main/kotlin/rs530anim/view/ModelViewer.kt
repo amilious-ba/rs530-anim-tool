@@ -28,7 +28,8 @@ import kotlin.math.max
 class ModelViewer : Application() {
     override fun start(stage: Stage) {
         val raw = parameters.raw
-        val modelId = raw.getOrNull(0)?.toIntOrNull() ?: 132
+        val modelSpec = raw.getOrNull(0) ?: "132"
+        val modelIds = modelSpec.split('+', ',').mapNotNull { it.trim().toIntOrNull() }.ifEmpty { listOf(132) }
         val seqId = raw.getOrNull(1)?.toIntOrNull()
         val frameNo = raw.getOrNull(2)?.toIntOrNull() ?: 0
 
@@ -44,7 +45,11 @@ class ModelViewer : Application() {
                 e.printStackTrace()
                 null
             }
-            val loaded = Rs2ModelLoader.decode(store.model(modelId))
+            var loaded = Rs2ModelLoader.decode(store.model(modelIds.first()))
+            for (id in modelIds.drop(1)) {
+                loaded = loaded.attach(Rs2ModelLoader.decode(store.model(id)))
+            }
+            println("models ${modelIds.joinToString("+")} verts=${loaded.vertexCount} faces=${loaded.faceCount}")
             if (seqId != null) {
                 val seq = AnimLibrary.loadSeq(store, seqId)
                 if (seq.length > 0) {
@@ -98,7 +103,7 @@ class ModelViewer : Application() {
         }
 
         val title = buildString {
-            append("rs530-anim-tool  model $modelId")
+            append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
             if (seqId != null) append("  seq $seqId frame $frameNo")
             append("  drag orbit  wheel zoom")
         }
@@ -125,41 +130,56 @@ private fun fitDistance(model: Rs2Model): Double {
 }
 
 private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
-    data class Tri(val a: Int, val b: Int, val c: Int, val color: Int)
+    data class Tri(val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
+    val minX = model.verticesX.minOrNull() ?: 0
+    val maxX = model.verticesX.maxOrNull() ?: 1
+    val minZ = model.verticesZ.minOrNull() ?: 0
+    val maxZ = model.verticesZ.maxOrNull() ?: 1
+    val spanX = (maxX - minX).coerceAtLeast(1).toFloat()
+    val spanZ = (maxZ - minZ).coerceAtLeast(1).toFloat()
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
-        val shaded = shadeFace(model, i, materials)
-        tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], shaded)
+        val tex = model.faceTextures?.getOrNull(i)?.toInt()?.and(0xFFFF) ?: 0xFFFF
+        tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], shadeFace(model, i, materials), tex)
     }
-    return tris.groupBy { it.color }.map { (hsl, group) ->
+    return tris.groupBy { it.tex }.map { (tex, group) ->
         val mesh = TriangleMesh()
-        mesh.texCoords.addAll(0f, 0f)
         val points = FloatArray(group.size * 9)
+        val uvs = FloatArray(group.size * 6)
         val faces = IntArray(group.size * 6)
         var p = 0
+        var t = 0
         var f = 0
         var vi = 0
+        var ti = 0
+        fun put(index: Int) {
+            points[p++] = model.verticesX[index].toFloat()
+            points[p++] = model.verticesY[index].toFloat()
+            points[p++] = model.verticesZ[index].toFloat()
+            uvs[t++] = (model.verticesX[index] - minX) / spanX
+            uvs[t++] = (model.verticesZ[index] - minZ) / spanZ
+        }
         for (tri in group) {
-            fun put(index: Int) {
-                // RS Y is down; JavaFX Y is up.
-                points[p++] = model.verticesX[index].toFloat()
-                points[p++] = model.verticesY[index].toFloat()
-                points[p++] = model.verticesZ[index].toFloat()
-            }
             put(tri.a); put(tri.b); put(tri.c)
-            faces[f++] = vi++; faces[f++] = 0
-            faces[f++] = vi++; faces[f++] = 0
-            faces[f++] = vi++; faces[f++] = 0
+            faces[f++] = vi++; faces[f++] = ti++
+            faces[f++] = vi++; faces[f++] = ti++
+            faces[f++] = vi++; faces[f++] = ti++
         }
         mesh.points.addAll(*points)
+        mesh.texCoords.addAll(*uvs)
         mesh.faces.addAll(*faces)
         val view = MeshView(mesh)
         view.cullFace = CullFace.NONE
         view.drawMode = DrawMode.FILL
-        val fx = Hsl.toFx(hsl)
-        view.material = PhongMaterial(fx).apply {
+        val hsl = group.first().color
+        val base = if (tex != 0xFFFF) materials?.solidHsl(tex) ?: (hsl) else hsl
+        view.material = PhongMaterial(Hsl.toFx(hsl)).apply {
             specularColor = Color.BLACK
             specularPower = 1.0
+            if (tex != 0xFFFF) {
+                diffuseMap = TextureExpander.image(tex, base)
+                diffuseColor = Color.WHITE
+            }
         }
         view
     }
