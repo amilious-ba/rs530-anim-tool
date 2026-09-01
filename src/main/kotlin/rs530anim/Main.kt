@@ -16,7 +16,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 fun main(args: Array<String>) {
-    val argv = if (args.isEmpty()) arrayOf("view", "132") else args
+    val argv = if (args.isEmpty()) arrayOf("view", "1456") else args
     val parsed = parseArgs(argv)
     when (parsed.command) {
         "selftest" -> runFrameSelfTest()
@@ -32,7 +32,7 @@ fun main(args: Array<String>) {
         "apply" -> applySeq(parsed)
         "skins" -> MonkeySkins.print()
         "view" -> {
-            val ids = if (parsed.rest.isEmpty()) listOf("132") else parsed.rest
+            val ids = if (parsed.rest.isEmpty()) listOf("1456") else parsed.rest
             rs530anim.view.ModelViewer.open(ids)
         }
         else -> loadAndDumpModel(parsed.copy(command = "model", rest = listOf(args[0]) + parsed.rest))

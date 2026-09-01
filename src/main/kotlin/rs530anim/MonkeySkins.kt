@@ -26,6 +26,26 @@ object MonkeySkins {
 
     fun byModel(id: Int): List<MonkeySkin> = all.filter { it.modelId == id }
 
+    fun resolve(spec: String): List<Int> {
+        val key = spec.trim().lowercase()
+        return when (key) {
+            "", "gigos", "full", "body", "archer" -> listOf(1456)
+            "head" -> listOf(132)
+            "ninja" -> listOf(1455)
+            "zombie" -> listOf(1467)
+            else -> spec.split('+', ',').mapNotNull { part ->
+                val p = part.trim().lowercase()
+                p.toIntOrNull() ?: when (p) {
+                    "head" -> 132
+                    "gigos", "full", "archer", "body" -> 1456
+                    "ninja" -> 1455
+                    "zombie" -> 1467
+                    else -> null
+                }
+            }.ifEmpty { listOf(1456) }
+        }
+    }
+
     fun print() {
         println("model  name            attack block death sleep wake")
         for (s in all) {

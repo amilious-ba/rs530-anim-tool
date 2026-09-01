@@ -1,21 +1,29 @@
 package rs530anim.view
 
 import javafx.application.Application
+import javafx.geometry.Insets
 import javafx.scene.AmbientLight
 import javafx.scene.Group
 import javafx.scene.PerspectiveCamera
 import javafx.scene.Scene
 import javafx.scene.SceneAntialiasing
+import javafx.scene.SubScene
+import javafx.scene.control.Label
+import javafx.scene.control.ListView
 import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
+import javafx.scene.layout.BorderPane
+import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
 import javafx.scene.shape.CullFace
 import javafx.scene.shape.DrawMode
 import javafx.scene.shape.MeshView
+import javafx.scene.shape.Sphere
 import javafx.scene.shape.TriangleMesh
 import javafx.scene.transform.Rotate
 import javafx.stage.Stage
+import rs530anim.MonkeySkins
 import rs530anim.anim.AnimLibrary
 import rs530anim.anim.ModelAnimator
 import rs530anim.cache.CacheSettings
@@ -28,8 +36,8 @@ import kotlin.math.max
 class ModelViewer : Application() {
     override fun start(stage: Stage) {
         val raw = parameters.raw
-        val modelSpec = raw.getOrNull(0) ?: "132"
-        val modelIds = modelSpec.split('+', ',').mapNotNull { it.trim().toIntOrNull() }.ifEmpty { listOf(132) }
+        val modelSpec = raw.getOrNull(0) ?: "1456"
+        val modelIds = MonkeySkins.resolve(modelSpec)
         val seqId = raw.getOrNull(1)?.toIntOrNull()
         val frameNo = raw.getOrNull(2)?.toIntOrNull() ?: 0
 
@@ -79,17 +87,56 @@ class ModelViewer : Application() {
         var distance = fitDistance(model)
         camera.translateZ = -distance
 
-        val scene = Scene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
-        scene.fill = Color.rgb(32, 32, 36)
-        scene.camera = camera
+        val highlight = Group()
+        world.children += highlight
+        val markMat = PhongMaterial(Color.YELLOW)
+
+        fun showLabel(label: Int?) {
+            highlight.children.clear()
+            if (label == null || label < 0 || label >= model.boneVertices.size) return
+            for (vi in model.boneVertices[label]) {
+                val ball = Sphere(2.4)
+                ball.material = markMat
+                ball.translateX = model.verticesX[vi].toDouble()
+                ball.translateY = model.verticesY[vi].toDouble()
+                ball.translateZ = model.verticesZ[vi].toDouble()
+                highlight.children += ball
+            }
+        }
+
+        val labels = model.uniqueVertexLabels()
+        val list = ListView<String>()
+        list.items.add("none")
+        for (lab in labels) {
+            list.items.add("vskin $lab  (${model.vertexCountForLabel(lab)} verts)")
+        }
+        list.selectionModel.select(0)
+        list.selectionModel.selectedIndexProperty().addListener { _, _, idx ->
+            val i = idx.toInt()
+            showLabel(if (i <= 0) null else labels.getOrNull(i - 1))
+        }
+
+        val side = VBox(
+            8.0,
+            Label("vskin labels"),
+            list,
+            Label("${model.vertexCount} verts  ${model.faceCount} faces"),
+        )
+        side.padding = Insets(8.0)
+        side.prefWidth = 220.0
+        list.prefHeight = 480.0
+
+        val sub = SubScene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
+        sub.fill = Color.rgb(32, 32, 36)
+        sub.camera = camera
 
         var lastX = 0.0
         var lastY = 0.0
-        scene.setOnMousePressed { e ->
+        sub.setOnMousePressed { e ->
             lastX = e.sceneX
             lastY = e.sceneY
         }
-        scene.setOnMouseDragged { e ->
+        sub.setOnMouseDragged { e ->
             if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
                 yaw.angle += (e.sceneX - lastX) * 0.4
                 pitch.angle += (e.sceneY - lastY) * 0.4
@@ -97,18 +144,24 @@ class ModelViewer : Application() {
                 lastY = e.sceneY
             }
         }
-        scene.addEventHandler(ScrollEvent.SCROLL) { e ->
+        sub.addEventHandler(ScrollEvent.SCROLL) { e ->
             distance = (distance - e.deltaY * 0.4).coerceIn(20.0, 8000.0)
             camera.translateZ = -distance
         }
 
+        val pane = BorderPane()
+        pane.center = sub
+        pane.left = side
+        sub.widthProperty().bind(pane.widthProperty().subtract(side.prefWidth))
+        sub.heightProperty().bind(pane.heightProperty())
+
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
             if (seqId != null) append("  seq $seqId frame $frameNo")
-            append("  drag orbit  wheel zoom")
+            append("  click a label")
         }
         stage.title = title
-        stage.scene = scene
+        stage.scene = Scene(pane, 1180.0, 720.0)
         stage.show()
     }
 
