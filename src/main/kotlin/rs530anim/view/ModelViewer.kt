@@ -186,6 +186,7 @@ class ModelViewer : Application() {
         }
 
         var syncingSliders = false
+        var refreshTimeline: () -> Unit = {}
 
         fun loadSlidersFromFrame() {
             if (seqFrames.isEmpty()) return
@@ -241,6 +242,7 @@ class ModelViewer : Application() {
                 "seq $seqIdLoaded  frame $currentFrame / ${seqFrames.size}  ${d} ticks (${d * 20} ms)"
             }
             rebuild()
+            refreshTimeline()
         }
 
         list.selectionModel.selectedIndexProperty().addListener { _, _, _ ->
@@ -414,11 +416,25 @@ class ModelViewer : Application() {
         StackPane.setAlignment(compass, Pos.TOP_RIGHT)
         StackPane.setMargin(compass, Insets(8.0))
 
+        val timeline = TimelineBar(
+            frames = { seqFrames },
+            delays = { seqDelays },
+            current = { currentFrame },
+            selectedLabel = { selectedLabel() },
+            onSeek = { i ->
+                if (seqFrames.isNotEmpty()) {
+                    frameSlider.value = i.toDouble()
+                }
+            },
+        )
+        refreshTimeline = { timeline.refresh() }
+
         val pane = BorderPane()
         pane.center = stack
         pane.left = side
+        pane.bottom = timeline.root
         sub.widthProperty().bind(pane.widthProperty().subtract(side.prefWidth))
-        sub.heightProperty().bind(pane.heightProperty())
+        sub.heightProperty().bind(pane.heightProperty().subtract(timeline.root.heightProperty()))
 
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
