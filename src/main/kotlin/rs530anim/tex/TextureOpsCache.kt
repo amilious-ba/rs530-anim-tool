@@ -43,6 +43,38 @@ class OpBlur : TextureOp(1, false) {
         }
         return row
     }
+    override fun colorOut(y: Int): Array<IntArray> {
+        val (row, miss) = color!!.row(y)
+        if (miss) {
+            val w = TextureContext.width
+            val hmask = TextureContext.heightMask
+            val wmask = TextureContext.widthMask
+            val ky = ry + ry + 1
+            val kx = rx + rx + 1
+            val sy = 65536 / ky
+            val sx = 65536 / kx.coerceAtLeast(1)
+            for (c in 0..2) {
+                val tmp = Array(ky) { IntArray(w) }
+                for (yy in (y - ry)..(y + ry)) {
+                    val src = childColor(0, yy and hmask)[c]
+                    var acc = 0
+                    for (xx in -rx..rx) acc += src[xx and wmask]
+                    val dest = tmp[yy - y + ry]
+                    for (x in 0 until w) {
+                        dest[x] = acc * sx shr 16
+                        acc -= src[(x - rx) and wmask]
+                        acc += src[(x + 1 + rx) and wmask]
+                    }
+                }
+                for (x in 0 until w) {
+                    var acc = 0
+                    for (i in 0 until ky) acc += tmp[i][x]
+                    row[c][x] = acc * sy shr 16
+                }
+            }
+        }
+        return row
+    }
 }
 
 class OpBrick : TextureOp(0, true) {
