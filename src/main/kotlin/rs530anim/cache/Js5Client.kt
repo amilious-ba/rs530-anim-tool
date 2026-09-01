@@ -34,7 +34,15 @@ class Js5Client(
         out.writeInt(settings.revision)
         out.flush()
 
-        val response = inp.readUnsignedByte()
+        val response = try {
+            inp.readUnsignedByte()
+        } catch (e: java.io.EOFException) {
+            close()
+            throw IllegalStateException(
+                "js5 handshake EOF from ${settings.host}:${settings.connectPort} — server closed the socket",
+                e,
+            )
+        }
         if (response != 0) {
             close()
             throw IllegalStateException(

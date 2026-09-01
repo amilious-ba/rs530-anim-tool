@@ -36,7 +36,7 @@ class ModelViewer : Application() {
         var materials: TextureMaterials? = null
         val model = Js5Store(settings).use { store ->
             materials = try {
-                TextureMaterials.load(store).also { mat ->
+                TextureMaterials.load().also { mat ->
                     println("texture 112 solid hsl=${mat.solidHsl(112)}  359=${mat.solidHsl(359)}")
                 }
             } catch (e: Exception) {

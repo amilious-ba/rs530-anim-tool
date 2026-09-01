@@ -15,10 +15,19 @@ class TextureMaterials(private val averageHsl: ShortArray) {
     }
 
     companion object {
-        fun load(store: Js5Store): TextureMaterials {
-            val files = store.groupFiles(Js5Archives.TEXTURE_META, 0)
-            val bytes = files[0] ?: files.values.first()
-            return decode(bytes)
+        fun load(store: Js5Store? = null): TextureMaterials {
+            val bundled = TextureMaterials::class.java.getResourceAsStream("/rs530anim/texture-meta-26.dat")
+            if (bundled != null) {
+                return decode(bundled.readBytes())
+            }
+            store?.cache?.read(store.cache.groupPath(Js5Archives.TEXTURE_META, 0))?.let {
+                return decode(it)
+            }
+            if (store != null) {
+                val files = store.groupFiles(Js5Archives.TEXTURE_META, 0)
+                return decode(files[0] ?: files.values.first())
+            }
+            error("texture-meta-26.dat missing from classpath and cache")
         }
 
         fun decode(bytes: ByteArray): TextureMaterials {
