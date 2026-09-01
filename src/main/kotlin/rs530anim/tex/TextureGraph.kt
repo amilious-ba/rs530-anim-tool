@@ -24,7 +24,11 @@ class TextureGraph(val ops: Array<TextureOp>, val root: TextureOp) {
                 r = c[0]; g = c[1]; b = c[2]
             }
             for (x in 0 until size) {
-                fun ch(v: Int): Int = map[(v shr 4).coerceIn(0, 255)]
+                fun ch(v: Int): Int {
+                    val raw = map[(v shr 4).coerceIn(0, 255)]
+                    // Stretch mid-greys so fiber/noise survives a dark face tint.
+                    return ((raw - 48) * 255 / 160).coerceIn(0, 255)
+                }
                 pw.setColor(x, y, Color.rgb(ch(r[x]), ch(g[x]), ch(b[x])))
             }
         }

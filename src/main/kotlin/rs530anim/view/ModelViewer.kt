@@ -343,20 +343,21 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
     }
     return tris.groupBy { it.tex }.map { (tex, group) ->
         val mesh = TriangleMesh()
-        val points = FloatArray(group.size * 9)
+        val points = FloatArray(model.vertexCount * 3)
+        var p = 0
+        for (i in 0 until model.vertexCount) {
+            points[p++] = model.verticesX[i].toFloat()
+            points[p++] = model.verticesY[i].toFloat()
+            points[p++] = model.verticesZ[i].toFloat()
+        }
         val uvs = FloatArray(group.size * 6)
         val faces = IntArray(group.size * 6)
-        var p = 0
         var t = 0
         var f = 0
-        var vi = 0
         var ti = 0
-        fun put(index: Int, u: Float, v: Float) {
-            points[p++] = model.verticesX[index].toFloat()
-            points[p++] = model.verticesY[index].toFloat()
-            points[p++] = model.verticesZ[index].toFloat()
-            uvs[t++] = u
-            uvs[t++] = v
+        fun wrap(s: Float): Float {
+            val w = s - kotlin.math.floor(s.toDouble()).toFloat()
+            return if (w < 0f) w + 1f else w
         }
         for (tri in group) {
             val ax = model.verticesX[tri.a].toFloat()
@@ -383,16 +384,17 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
                 }
             }
             val ua = uv(tri.a); val ub = uv(tri.b); val uc = uv(tri.c)
-            put(tri.a, ua.first, ua.second)
-            put(tri.b, ub.first, ub.second)
-            put(tri.c, uc.first, uc.second)
-            faces[f++] = vi++; faces[f++] = ti++
-            faces[f++] = vi++; faces[f++] = ti++
-            faces[f++] = vi++; faces[f++] = ti++
+            uvs[t++] = wrap(ua.first); uvs[t++] = wrap(ua.second)
+            uvs[t++] = wrap(ub.first); uvs[t++] = wrap(ub.second)
+            uvs[t++] = wrap(uc.first); uvs[t++] = wrap(uc.second)
+            faces[f++] = tri.a; faces[f++] = ti++
+            faces[f++] = tri.b; faces[f++] = ti++
+            faces[f++] = tri.c; faces[f++] = ti++
         }
         mesh.points.addAll(*points)
         mesh.texCoords.addAll(*uvs)
         mesh.faces.addAll(*faces)
+        mesh.faceSmoothingGroups.addAll(*IntArray(group.size) { 1 })
         val view = MeshView(mesh)
         view.cullFace = CullFace.NONE
         view.drawMode = DrawMode.FILL
