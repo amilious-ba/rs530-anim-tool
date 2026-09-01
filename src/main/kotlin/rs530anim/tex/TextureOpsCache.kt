@@ -3,6 +3,50 @@ package rs530anim.tex
 import rs530anim.model.Rs2Buffer
 import java.util.Random
 
+class OpHGrad : TextureOp(0, true) {
+    override fun monoOut(y: Int) = TextureContext.widthFractions
+}
+
+class OpVGrad : TextureOp(0, true) {
+    override fun monoOut(y: Int): IntArray {
+        val (row, miss) = mono!!.row(y)
+        if (miss) row.fill(TextureContext.heightFractions[y])
+        return row
+    }
+}
+
+class OpRange : TextureOp(1, false) {
+    private var add = 1024
+    private var span = 2048
+    private var hi = 3072
+    override fun decode(code: Int, b: Rs2Buffer) {
+        when (code) {
+            0 -> add = b.g2()
+            1 -> hi = b.g2()
+            2 -> monochrome = b.g1() == 1
+        }
+    }
+    override fun postDecode() { span = hi - add }
+    override fun monoOut(y: Int): IntArray {
+        val (row, miss) = mono!!.row(y)
+        if (miss) {
+            val src = childMono(0, y)
+            for (x in src.indices) row[x] = add + (src[x] * span shr 12)
+        }
+        return row
+    }
+    override fun colorOut(y: Int): Array<IntArray> {
+        val (row, miss) = color!!.row(y)
+        if (miss) {
+            val src = childColor(0, y)
+            for (c in 0..2) for (x in src[c].indices) {
+                row[c][x] = add + (src[c][x] * span shr 12)
+            }
+        }
+        return row
+    }
+}
+
 /** rt4.TextureOp15 — Voronoi / cell noise. */
 class OpVoronoi : TextureOp(0, true) {
     private var function = 2

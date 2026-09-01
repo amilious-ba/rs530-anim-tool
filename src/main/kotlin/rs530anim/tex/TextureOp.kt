@@ -45,6 +45,8 @@ abstract class TextureOp(val inputs: Int, var monochrome: Boolean) {
         fun create(type: Int): TextureOp = when (type) {
             0 -> OpMonoFill()
             1 -> OpColorFill()
+            2 -> OpHGrad()
+            3 -> OpVGrad()
             6 -> OpClamp()
             7 -> OpCombine()
             8 -> OpCurve()
@@ -55,6 +57,7 @@ abstract class TextureOp(val inputs: Int, var monochrome: Boolean) {
             19 -> OpDisplace()
             22 -> OpInvert()
             27 -> OpStripes()
+            30 -> OpRange()
             32 -> OpEmboss()
             34 -> OpFractal()
             36 -> OpNestedTexture()
