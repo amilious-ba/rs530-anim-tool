@@ -52,8 +52,8 @@ object ExtrasStore {
 
     fun load(
         seqId: Int,
-        bases: (Int) -> AnimBase,
         root: Path = defaultRoot(),
+        bases: (Int) -> AnimBase,
     ): Pair<SeqExtras, List<AnimFrame>> {
         val seqPath = seqFile(root, seqId)
         require(Files.isRegularFile(seqPath)) { "no extras seq $seqId at $seqPath" }
