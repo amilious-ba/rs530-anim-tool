@@ -51,9 +51,13 @@ abstract class TextureOp(val inputs: Int, var monochrome: Boolean) {
             9 -> OpFlip()
             10 -> OpColorGradient()
             13 -> OpNoiseFlag()
+            15 -> OpVoronoi()
+            19 -> OpDisplace()
             22 -> OpInvert()
+            27 -> OpStripes()
             32 -> OpEmboss()
             34 -> OpFractal()
+            36 -> OpNestedTexture()
             else -> OpUnsupported(type)
         }
     }
