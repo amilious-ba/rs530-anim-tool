@@ -56,6 +56,18 @@ class Js5Store(
         return bytes
     }
 
+    fun textureBytes(id: Int): ByteArray {
+        val path = cache.root.resolve("js5").resolve(Js5Archives.TEXTURES.toString()).resolve("$id.dat")
+        cache.read(path)?.let { return it }
+        bundled("textures/$id.dat")?.let {
+            cache.write(path, it)
+            return it
+        }
+        val bytes = file(Js5Archives.TEXTURES, id, 0)
+        cache.write(path, bytes)
+        return bytes
+    }
+
     fun seqBytes(id: Int): ByteArray {
         val path = cache.seqPath(id)
         cache.read(path)?.let { return it }

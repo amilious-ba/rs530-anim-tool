@@ -16,6 +16,7 @@ object TextureExpander {
     const val SIZE = 128
 
     fun image(textureId: Int, baseHsl: Int): Image {
+        rs530anim.tex.TextureLibrary.image(textureId)?.let { return it }
         TextureExpander::class.java.getResourceAsStream("/rs530anim/teximg/$textureId.png")?.use {
             return Image(it)
         }
