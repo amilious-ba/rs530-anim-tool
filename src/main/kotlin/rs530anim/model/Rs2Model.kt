@@ -19,6 +19,17 @@ data class Rs2Model(
     val faceTextures: ShortArray?,
     val vertexBones: IntArray?,
     val triangleBones: IntArray?,
+    val textureTypes: ByteArray? = null,
+    val textureP: ShortArray? = null,
+    val textureM: ShortArray? = null,
+    val textureN: ShortArray? = null,
+    val textureIndex: ByteArray? = null,
+    val textureScaleX: ShortArray? = null,
+    val textureScaleY: ShortArray? = null,
+    val textureScaleZ: ShortArray? = null,
+    val textureRotY: ByteArray? = null,
+    val textureDir: ByteArray? = null,
+    val textureOff: ByteArray? = null,
 ) {
     val boneVertices: Array<IntArray> = buildBoneVertices()
 

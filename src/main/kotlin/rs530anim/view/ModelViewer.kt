@@ -320,7 +320,7 @@ private fun fitDistance(model: Rs2Model): Double {
 }
 
 private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
-    data class Tri(val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
+    data class Tri(val face: Int, val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
     val minX = (model.verticesX.minOrNull() ?: 0).toFloat()
     val maxX = (model.verticesX.maxOrNull() ?: 1).toFloat()
     val minY = (model.verticesY.minOrNull() ?: 0).toFloat()
@@ -333,7 +333,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
         val tex = model.faceTextures?.getOrNull(i)?.toInt()?.and(0xFFFF) ?: 0xFFFF
-        tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], shadeFace(model, i, materials), tex)
+        tris += Tri(i, model.faceA[i], model.faceB[i], model.faceC[i], shadeFace(model, i, materials), tex)
     }
     return tris.groupBy { it.tex }.map { (tex, group) ->
         val mesh = TriangleMesh()
@@ -366,6 +366,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
             val any = kotlin.math.abs(ny)
             val anz = kotlin.math.abs(nz)
             fun uv(index: Int): Pair<Float, Float> {
+                clientPmnUv(model, tri.face, index)?.let { return it }
                 val x = model.verticesX[index].toFloat()
                 val y = model.verticesY[index].toFloat()
                 val z = model.verticesZ[index].toFloat()
@@ -499,6 +500,119 @@ private fun centerModel(model: Rs2Model) {
         model.verticesY[i] -= cy
         model.verticesZ[i] -= cz
     }
+}
+
+/** GlModel type-0 P/M/N barycentric, type-2 cylindrical (method4095/4097). */
+private fun clientPmnUv(model: Rs2Model, face: Int, vertex: Int): Pair<Float, Float>? {
+    val slot = model.textureIndex?.getOrNull(face)?.toInt() ?: return null
+    if (slot < 0) return null
+    val type = model.textureTypes?.getOrNull(slot)?.toInt() ?: return null
+    if (type == 2) return clientType2Uv(model, slot, vertex)
+    if (type != 0) return null
+    val p = model.textureP?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: return null
+    val m = model.textureM?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: return null
+    val n = model.textureN?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: return null
+    if (p >= model.vertexCount || m >= model.vertexCount || n >= model.vertexCount) return null
+    fun vx(i: Int) = model.verticesX[i].toFloat()
+    fun vy(i: Int) = model.verticesY[i].toFloat()
+    fun vz(i: Int) = model.verticesZ[i].toFloat()
+    val px = vx(p); val py = vy(p); val pz = vz(p)
+    val mx = vx(m) - px; val my = vy(m) - py; val mz = vz(m) - pz
+    val nxv = vx(n) - px; val ny = vy(n) - py; val nz = vz(n) - pz
+    val cx = vx(vertex) - px; val cy = vy(vertex) - py; val cz = vz(vertex) - pz
+    val i = my * nz - mz * ny
+    val j = mz * nxv - mx * nz
+    val k = mx * ny - my * nxv
+    val f = i * mx + j * my + k * mz
+    if (f == 0f) return null
+    val u = (i * cx + j * cy + k * cz) / f
+    val ii = my * k - mz * j
+    val jj = mz * i - mx * k
+    val kk = mx * j - my * i
+    val g = ii * nxv + jj * ny + kk * nz
+    if (g == 0f) return null
+    val v = (ii * cx + jj * cy + kk * cz) / g
+    return u to v
+}
+
+private fun clientType2Uv(model: Rs2Model, slot: Int, vertex: Int): Pair<Float, Float>? {
+    val sx = 64f / ((model.textureScaleX?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: 64).coerceAtLeast(1))
+    val sy = 64f / ((model.textureScaleY?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: 64).coerceAtLeast(1))
+    val sz = 64f / ((model.textureScaleZ?.getOrNull(slot)?.toInt()?.and(0xFFFF) ?: 64).coerceAtLeast(1))
+    val p = model.textureP?.getOrNull(slot)?.toInt() ?: 0
+    val m = model.textureM?.getOrNull(slot)?.toInt() ?: 0
+    val n = model.textureN?.getOrNull(slot)?.toInt() ?: 0
+    val rot = model.textureRotY?.getOrNull(slot)?.toInt()?.and(0xFF) ?: 0
+    val basis = glMethod4097(p, m, n, rot, sx, sy, sz)
+    var minX = Int.MAX_VALUE; var maxX = Int.MIN_VALUE
+    var minY = Int.MAX_VALUE; var maxY = Int.MIN_VALUE
+    var minZ = Int.MAX_VALUE; var maxZ = Int.MIN_VALUE
+    val idx = model.textureIndex ?: return null
+    for (f in 0 until model.faceCount) {
+        if (idx[f].toInt() != slot) continue
+        for (v in intArrayOf(model.faceA[f], model.faceB[f], model.faceC[f])) {
+            minX = minOf(minX, model.verticesX[v]); maxX = maxOf(maxX, model.verticesX[v])
+            minY = minOf(minY, model.verticesY[v]); maxY = maxOf(maxY, model.verticesY[v])
+            minZ = minOf(minZ, model.verticesZ[v]); maxZ = maxOf(maxZ, model.verticesZ[v])
+        }
+    }
+    val ox = (minX + maxX) / 2
+    val oy = (minY + maxY) / 2
+    val oz = (minZ + maxZ) / 2
+    val dx = model.verticesX[vertex] - ox
+    val dy = model.verticesY[vertex] - oy
+    val dz = model.verticesZ[vertex] - oz
+    val lx = dx * basis[0] + dy * basis[1] + dz * basis[2]
+    val ly = dx * basis[3] + dy * basis[4] + dz * basis[5]
+    val lz = dx * basis[6] + dy * basis[7] + dz * basis[8]
+    var u = (kotlin.math.atan2(lx, lz) / 6.2831855f) + 0.5f
+    var v = ly + ((model.textureOff?.getOrNull(slot)?.toInt() ?: 0) / 256f) + 0.5f
+    val dir = model.textureDir?.getOrNull(slot)?.toInt() ?: 0
+    when (dir) {
+        1 -> { val t = u; u = -v; v = t }
+        2 -> { u = -u; v = -v }
+        3 -> { val t = u; u = v; v = -t }
+    }
+    return u to v
+}
+
+private fun glMethod4097(arg0: Int, arg1: Int, arg2: Int, arg3: Int, arg4: Float, arg5: Float, arg6: Float): FloatArray {
+    val c = kotlin.math.cos(arg3 * 0.024543693f)
+    val s = kotlin.math.sin(arg3 * 0.024543693f)
+    val r = floatArrayOf(c, 0f, s, 0f, 1f, 0f, -s, 0f, c)
+    val dip = arg1 / 32767f
+    val dipZ = -kotlin.math.sqrt((1f - dip * dip).coerceAtLeast(0f))
+    val om = 1f - dip
+    val len = kotlin.math.sqrt((arg0.toFloat() * arg0 + arg2.toFloat() * arg2))
+    var gx = 1f
+    var gz = 0f
+    val out = FloatArray(9)
+    if (len == 0f && dip == 0f) {
+        r.copyInto(out)
+    } else {
+        if (len != 0f) {
+            gx = -arg2 / len
+            gz = arg0 / len
+        }
+        val b = floatArrayOf(
+            dip + gx * gx * om, gz * dipZ, gz * gx * om,
+            -gz * dipZ, dip, gx * dipZ,
+            gx * gz * om, -gx * dipZ, dip + gz * gz * om,
+        )
+        out[0] = r[0] * b[0] + r[1] * b[3] + r[2] * b[6]
+        out[1] = r[0] * b[1] + r[1] * b[4] + r[2] * b[7]
+        out[2] = r[0] * b[2] + r[1] * b[5] + r[2] * b[8]
+        out[3] = r[3] * b[0] + r[4] * b[3] + r[5] * b[6]
+        out[4] = r[3] * b[1] + r[4] * b[4] + r[5] * b[7]
+        out[5] = r[3] * b[2] + r[4] * b[5] + r[5] * b[8]
+        out[6] = r[6] * b[0] + r[7] * b[3] + r[8] * b[6]
+        out[7] = r[6] * b[1] + r[7] * b[4] + r[8] * b[7]
+        out[8] = r[6] * b[2] + r[7] * b[5] + r[8] * b[8]
+    }
+    out[0] *= arg4; out[1] *= arg4; out[2] *= arg4
+    out[3] *= arg5; out[4] *= arg5; out[5] *= arg5
+    out[6] *= arg6; out[7] *= arg6; out[8] *= arg6
+    return out
 }
 
 private fun faceHsl(model: Rs2Model, face: Int, materials: TextureMaterials?): Int {

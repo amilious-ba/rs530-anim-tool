@@ -131,7 +131,7 @@ object Rs2ModelLoader {
         val faceColors = ShortArray(triangleCount) { colorBuf.g2().toShort() }
         val faceTextures = if (hasTextures == 1) {
             val texBuf = Rs2Buffer(src, triangleTexturesDataOffset)
-            ShortArray(triangleCount) { texBuf.g2().toShort() }
+            ShortArray(triangleCount) { (texBuf.g2() - 1).toShort() }
         } else {
             null
         }
@@ -150,6 +150,59 @@ object Rs2ModelLoader {
             null
         }
 
+        val textureTypes = if (texturedCount > 0) ByteArray(texturedCount) { src[it] } else null
+        val textureP = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureM = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureN = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureScaleX = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureScaleY = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureScaleZ = if (texturedCount > 0) ShortArray(texturedCount) else null
+        val textureRotY = if (texturedCount > 0) ByteArray(texturedCount) else null
+        val textureDir = if (texturedCount > 0) ByteArray(texturedCount) else null
+        val textureOff = if (texturedCount > 0) ByteArray(texturedCount) else null
+        if (texturedCount > 0) {
+            val simpleOff = dzDataOffset + dzDataLength
+            val simpleBuf = Rs2Buffer(src, simpleOff)
+            val complexOff = simpleOff + simpleTextureFaceCount * 6
+            val complexBuf = Rs2Buffer(src, complexOff)
+            val scaleBuf = Rs2Buffer(src, complexOff + complexTextureFaceCount * 6)
+            val rotBuf = Rs2Buffer(src, complexOff + complexTextureFaceCount * 12)
+            val dirBuf = Rs2Buffer(src, rotBuf.offset + complexTextureFaceCount)
+            // rotBuf offset after construct is start; compute explicitly
+            val rotOff = complexOff + complexTextureFaceCount * 12
+            val dirOff = rotOff + complexTextureFaceCount
+            val offOff = dirOff + complexTextureFaceCount
+            val rotB = Rs2Buffer(src, rotOff)
+            val dirB = Rs2Buffer(src, dirOff)
+            val offB = Rs2Buffer(src, offOff)
+            for (t in 0 until texturedCount) {
+                val typ = textureTypes!![t].toInt() and 0xFF
+                if (typ == 0) {
+                    textureP!![t] = simpleBuf.g2().toShort()
+                    textureM!![t] = simpleBuf.g2().toShort()
+                    textureN!![t] = simpleBuf.g2().toShort()
+                } else {
+                    textureP!![t] = complexBuf.g2().toShort()
+                    textureM!![t] = complexBuf.g2().toShort()
+                    textureN!![t] = complexBuf.g2().toShort()
+                    textureScaleX!![t] = scaleBuf.g2().toShort()
+                    textureScaleY!![t] = scaleBuf.g2().toShort()
+                    textureScaleZ!![t] = scaleBuf.g2().toShort()
+                    textureRotY!![t] = rotB.g1b()
+                    textureDir!![t] = dirB.g1b()
+                    textureOff!![t] = offB.g1b()
+                }
+            }
+        }
+        val textureIndex = if (hasTextures == 1 && texturedCount > 0) {
+            val buf = Rs2Buffer(src, triangleTexturesDataOffset + triangleCount * 2)
+            ByteArray(triangleCount) { i ->
+                if (faceTextures!![i].toInt() == -1) -1 else (buf.g1() - 1).toByte()
+            }
+        } else {
+            null
+        }
+
         return Rs2Model(
             format = "new",
             vertexCount = vertexCount,
@@ -164,6 +217,17 @@ object Rs2ModelLoader {
             faceTextures = faceTextures,
             vertexBones = vertexBones,
             triangleBones = triangleBones,
+            textureTypes = textureTypes,
+            textureP = textureP,
+            textureM = textureM,
+            textureN = textureN,
+            textureIndex = textureIndex,
+            textureScaleX = textureScaleX,
+            textureScaleY = textureScaleY,
+            textureScaleZ = textureScaleZ,
+            textureRotY = textureRotY,
+            textureDir = textureDir,
+            textureOff = textureOff,
         )
     }
 
