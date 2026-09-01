@@ -7,6 +7,7 @@ import javafx.geometry.Pos
 import javafx.scene.layout.StackPane
 import javafx.scene.shape.Cylinder
 import javafx.scene.AmbientLight
+import javafx.scene.PointLight
 import javafx.scene.Group
 import javafx.scene.PerspectiveCamera
 import javafx.scene.Scene
@@ -101,7 +102,12 @@ class ModelViewer : Application() {
         var currentFrame = frameNo.coerceIn(0, (seqFrames.size - 1).coerceAtLeast(0))
 
         val world = Group()
-        world.children += AmbientLight(Color.WHITE)
+        world.children += AmbientLight(Color.color(0.55, 0.55, 0.55))
+        world.children += PointLight(Color.WHITE).apply {
+            translateX = -80.0
+            translateY = -120.0
+            translateZ = -80.0
+        }
         world.children += groundMarker(model)
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
@@ -398,8 +404,10 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
                 val img = rs530anim.tex.TextureLibrary.image(tex)
                 if (img != null) {
                     diffuseMap = img
+                    diffuseColor = Color.WHITE
+                } else {
+                    diffuseColor = Hsl.toFx(hsl)
                 }
-                diffuseColor = Hsl.toFx(hsl)
             }
         }
         view
