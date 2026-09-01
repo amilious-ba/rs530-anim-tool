@@ -14,8 +14,14 @@ data class NpcRow(
 
 object NpcCatalog {
     private val extraModels = mapOf(
-        132 to listOf(132),
-        4344 to listOf(132),
+        132 to listOf(3004),
+        4344 to listOf(3004),
+        1455 to listOf(4821, 4828, 4833),
+        1456 to listOf(4821, 4828, 4831),
+        1457 to listOf(4821, 4828, 4831),
+        1465 to listOf(4817, 4824),
+        1466 to listOf(4817, 4824),
+        1467 to listOf(4817, 4824),
     )
 
     val all: List<NpcRow> by lazy { load() }
