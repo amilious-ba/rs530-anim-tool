@@ -68,7 +68,17 @@ class ModelViewer : Application() {
             for (id in modelIds.drop(1)) {
                 loaded = loaded.attach(Rs2ModelLoader.decode(store.model(id)))
             }
-            println("models ${modelIds.joinToString("+")} verts=${loaded.vertexCount} faces=${loaded.faceCount}")
+            val usedTex = loaded.faceTextures
+                ?.map { it.toInt() and 0xFFFF }
+                ?.filter { it != 0xFFFF }
+                ?.groupingBy { it }
+                ?.eachCount()
+                ?: emptyMap()
+            println("models ${modelIds.joinToString("+")} verts=${loaded.vertexCount} faces=${loaded.faceCount} textures=$usedTex")
+            for (tid in usedTex.keys.sorted()) {
+                val img = rs530anim.tex.TextureLibrary.image(tid)
+                println("texture $tid ${if (img != null) "graph-ok" else "graph-fail solid=${materials?.solidHsl(tid)}"}")
+            }
             loaded
         }
         var seqFrames: List<AnimFrame> = emptyList()
@@ -385,8 +395,13 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
             specularColor = Color.BLACK
             specularPower = 1.0
             if (tex != 0xFFFF) {
-                diffuseMap = TextureExpander.image(tex, base)
-                diffuseColor = Color.WHITE
+                val img = rs530anim.tex.TextureLibrary.image(tex)
+                if (img != null) {
+                    diffuseMap = img
+                    diffuseColor = Color.WHITE
+                } else {
+                    diffuseColor = Hsl.toFx(base)
+                }
             }
         }
         view
