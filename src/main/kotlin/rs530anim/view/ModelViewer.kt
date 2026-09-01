@@ -149,7 +149,7 @@ class ModelViewer : Application() {
                 val ball = Sphere(2.4)
                 ball.material = markMat
                 ball.translateX = model.verticesX[vi].toDouble()
-                ball.translateY = model.verticesY[vi].toDouble()
+                ball.translateY = -model.verticesY[vi].toDouble()
                 ball.translateZ = model.verticesZ[vi].toDouble()
                 highlight.children += ball
             }
@@ -337,7 +337,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         var ti = 0
         fun put(index: Int, u: Float, v: Float) {
             points[p++] = model.verticesX[index].toFloat()
-            points[p++] = model.verticesY[index].toFloat()
+            points[p++] = -model.verticesY[index].toFloat()
             points[p++] = model.verticesZ[index].toFloat()
             uvs[t++] = u
             uvs[t++] = v
@@ -432,16 +432,16 @@ private fun axisCompass(yaw: Rotate, pitch: Rotate): SubScene {
 
 /** Wire rectangle on XZ at the feet, plus a notch on −Z (toward the default camera). */
 private fun groundMarker(model: Rs2Model): MeshView {
-    var minX = 0; var maxX = 0; var minY = 0; var minZ = 0; var maxZ = 0
+    var minX = 0; var maxX = 0; var maxY = 0; var minZ = 0; var maxZ = 0
     if (model.vertexCount > 0) {
         minX = model.verticesX.minOrNull() ?: 0
         maxX = model.verticesX.maxOrNull() ?: 0
-        minY = model.verticesY.minOrNull() ?: 0
+        maxY = model.verticesY.maxOrNull() ?: 0
         minZ = model.verticesZ.minOrNull() ?: 0
         maxZ = model.verticesZ.maxOrNull() ?: 0
     }
     val pad = 12f
-    val y = minY.toFloat()
+    val y = -maxY.toFloat()
     val x0 = minX.toFloat() - pad
     val x1 = maxX.toFloat() + pad
     val z0 = minZ.toFloat() - pad
