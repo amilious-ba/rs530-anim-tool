@@ -3,6 +3,9 @@ package rs530anim.view
 import javafx.animation.AnimationTimer
 import javafx.application.Application
 import javafx.geometry.Insets
+import javafx.geometry.Pos
+import javafx.scene.layout.StackPane
+import javafx.scene.shape.Cylinder
 import javafx.scene.AmbientLight
 import javafx.scene.Group
 import javafx.scene.PerspectiveCamera
@@ -268,8 +271,13 @@ class ModelViewer : Application() {
             camera.translateZ = -distance
         }
 
+        val compass = axisCompass(yaw, pitch)
+        val stack = StackPane(sub, compass)
+        StackPane.setAlignment(compass, Pos.TOP_RIGHT)
+        StackPane.setMargin(compass, Insets(8.0))
+
         val pane = BorderPane()
-        pane.center = sub
+        pane.center = stack
         pane.left = side
         sub.widthProperty().bind(pane.widthProperty().subtract(side.prefWidth))
         sub.heightProperty().bind(pane.heightProperty())
@@ -391,6 +399,36 @@ private const val LIGHT_ATTEN = 768
 private const val LIGHT_X = -50
 private const val LIGHT_Y = -10
 private const val LIGHT_Z = -50
+
+private fun axisRod(length: Double, color: Color): Cylinder {
+    val rod = Cylinder(0.7, length)
+    rod.material = PhongMaterial(color)
+    return rod
+}
+
+/** Tiny XYZ gizmo; yaw/pitch bound to the main orbit so it tracks the camera. */
+private fun axisCompass(yaw: Rotate, pitch: Rotate): SubScene {
+    val x = axisRod(18.0, Color.web("#e74c3c")).apply {
+        transforms.add(Rotate(90.0, Rotate.Z_AXIS))
+    }
+    val y = axisRod(18.0, Color.web("#2ecc71"))
+    val z = axisRod(18.0, Color.web("#3498db")).apply {
+        transforms.add(Rotate(90.0, Rotate.X_AXIS))
+    }
+    val pivot = Group(x, y, z, AmbientLight(Color.WHITE))
+    val cy = Rotate(0.0, Rotate.Y_AXIS).apply { angleProperty().bind(yaw.angleProperty()) }
+    val cp = Rotate(0.0, Rotate.X_AXIS).apply { angleProperty().bind(pitch.angleProperty()) }
+    pivot.transforms.addAll(cy, cp)
+    val cam = PerspectiveCamera(true)
+    cam.nearClip = 0.1
+    cam.farClip = 200.0
+    cam.translateZ = -48.0
+    val scene = SubScene(Group(pivot), 112.0, 112.0, true, SceneAntialiasing.BALANCED)
+    scene.fill = Color.rgb(20, 20, 24, 0.35)
+    scene.camera = cam
+    scene.isMouseTransparent = true
+    return scene
+}
 
 /** Wire rectangle on XZ at the feet, plus a notch on −Z (toward the default camera). */
 private fun groundMarker(model: Rs2Model): MeshView {
