@@ -149,7 +149,7 @@ class ModelViewer : Application() {
                 val ball = Sphere(2.4)
                 ball.material = markMat
                 ball.translateX = model.verticesX[vi].toDouble()
-                ball.translateY = -model.verticesY[vi].toDouble()
+                ball.translateY = model.verticesY[vi].toDouble()
                 ball.translateZ = model.verticesZ[vi].toDouble()
                 highlight.children += ball
             }
@@ -337,7 +337,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         var ti = 0
         fun put(index: Int, u: Float, v: Float) {
             points[p++] = model.verticesX[index].toFloat()
-            points[p++] = -model.verticesY[index].toFloat()
+            points[p++] = model.verticesY[index].toFloat()
             points[p++] = model.verticesZ[index].toFloat()
             uvs[t++] = u
             uvs[t++] = v
@@ -441,7 +441,7 @@ private fun groundMarker(model: Rs2Model): MeshView {
         maxZ = model.verticesZ.maxOrNull() ?: 0
     }
     val pad = 12f
-    val y = -maxY.toFloat()
+    val y = maxY.toFloat()
     val x0 = minX.toFloat() - pad
     val x1 = maxX.toFloat() + pad
     val z0 = minZ.toFloat() - pad
