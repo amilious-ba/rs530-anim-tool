@@ -30,6 +30,7 @@ fun main(args: Array<String>) {
         "model", "js5-model", "js5" -> loadAndDumpModel(parsed)
         "seq" -> dumpSeq(parsed)
         "apply" -> applySeq(parsed)
+        "skins" -> MonkeySkins.print()
         "view" -> {
             val ids = if (parsed.rest.isEmpty()) listOf("132") else parsed.rest
             rs530anim.view.ModelViewer.open(ids)
@@ -73,6 +74,7 @@ private fun printUsage() {
     System.err.println("Fetched files land in ${AppPaths.cacheDir()} (models/, bases/, frames/)")
     System.err.println("  rs530-anim-tool seq 220")
     System.err.println("  rs530-anim-tool apply 132 220")
+    System.err.println("  rs530-anim-tool skins")
     System.err.println("  rs530-anim-tool view 132")
     System.err.println("  rs530-anim-tool view 132 220 0")
     System.err.println("  rs530-anim-tool frame <frame.dat> <base.dat>")
@@ -195,8 +197,8 @@ private fun applySeq(parsed: ParsedArgs) {
             val slot = frame.indices[i].toInt()
             println(
                 "  slot $slot ${TransformType.nameOf(frame.base.types[slot])} " +
-                        "xyz=${frame.x[i]},${frame.y[i]},${frame.z[i]} " +
-                        "labels=${frame.base.bones[slot].contentToString()}",
+                    "xyz=${frame.x[i]},${frame.y[i]},${frame.z[i]} " +
+                    "labels=${frame.base.bones[slot].contentToString()}",
             )
         }
         println("origin after    : ${anim.originX},${anim.originY},${anim.originZ}")
@@ -222,9 +224,9 @@ private fun dumpFrame(framePath: Path, basePath: Path) {
         val slot = frame.indices[i].toInt()
         println(
             "  [$i] slot=$slot type=${TransformType.nameOf(base.types[slot])} " +
-                    "xyz=${frame.x[i]},${frame.y[i]},${frame.z[i]} " +
-                    "flags=${frame.flags[i]} prevOrigin=${frame.prevOriginIndices[i]} " +
-                    "labels=${base.bones[slot].contentToString()}",
+                "xyz=${frame.x[i]},${frame.y[i]},${frame.z[i]} " +
+                "flags=${frame.flags[i]} prevOrigin=${frame.prevOriginIndices[i]} " +
+                "labels=${base.bones[slot].contentToString()}",
         )
     }
 }

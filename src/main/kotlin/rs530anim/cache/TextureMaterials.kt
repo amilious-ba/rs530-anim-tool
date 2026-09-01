@@ -16,7 +16,8 @@ class TextureMaterials(private val averageHsl: ShortArray) {
 
     companion object {
         fun load(store: Js5Store): TextureMaterials {
-            val bytes = store.file(Js5Archives.TEXTURE_META, 0, 0)
+            val files = store.groupFiles(Js5Archives.TEXTURE_META, 0)
+            val bytes = files[0] ?: files.values.first()
             return decode(bytes)
         }
 

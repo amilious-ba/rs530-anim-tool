@@ -35,7 +35,15 @@ class ModelViewer : Application() {
         val settings = CacheSettings.load(null)
         var materials: TextureMaterials? = null
         val model = Js5Store(settings).use { store ->
-            materials = runCatching { TextureMaterials.load(store) }.getOrNull()
+            materials = try {
+                TextureMaterials.load(store).also { mat ->
+                    println("texture 112 solid hsl=${mat.solidHsl(112)}  359=${mat.solidHsl(359)}")
+                }
+            } catch (e: Exception) {
+                System.err.println("texture table failed: ${e.message}")
+                e.printStackTrace()
+                null
+            }
             val loaded = Rs2ModelLoader.decode(store.model(modelId))
             if (seqId != null) {
                 val seq = AnimLibrary.loadSeq(store, seqId)
