@@ -16,6 +16,7 @@ data class Rs2Model(
     val faceB: IntArray,
     val faceC: IntArray,
     val faceColors: ShortArray,
+    val faceTextures: ShortArray?,
     val vertexBones: IntArray?,
     val triangleBones: IntArray?,
 ) {

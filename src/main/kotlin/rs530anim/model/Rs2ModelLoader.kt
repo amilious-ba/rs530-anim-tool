@@ -75,6 +75,7 @@ object Rs2ModelLoader {
         if (hasAlpha == 1) offset += triangleCount
         val vertexIndexDataOffset = offset
         offset += vertexIndexDataLength
+        val triangleTexturesDataOffset = offset
         if (hasTextures == 1) offset += triangleCount * 2
         offset += triangleTextureDataLength
         val triangleColorDataOffset = offset
@@ -128,6 +129,12 @@ object Rs2ModelLoader {
 
         val colorBuf = Rs2Buffer(src, triangleColorDataOffset)
         val faceColors = ShortArray(triangleCount) { colorBuf.g2().toShort() }
+        val faceTextures = if (hasTextures == 1) {
+            val texBuf = Rs2Buffer(src, triangleTexturesDataOffset)
+            ShortArray(triangleCount) { texBuf.g2().toShort() }
+        } else {
+            null
+        }
 
         val typeBuf = Rs2Buffer(src, triangleTypeDataOffset)
         val indexBuf = Rs2Buffer(src, vertexIndexDataOffset)
@@ -154,6 +161,7 @@ object Rs2ModelLoader {
             faceB = fb,
             faceC = fc,
             faceColors = faceColors,
+            faceTextures = faceTextures,
             vertexBones = vertexBones,
             triangleBones = triangleBones,
         )
@@ -253,6 +261,7 @@ object Rs2ModelLoader {
             faceB = fb,
             faceC = fc,
             faceColors = faceColors,
+            faceTextures = null,
             vertexBones = vertexBones,
             triangleBones = triangleBones,
         )

@@ -20,6 +20,7 @@ import rs530anim.anim.AnimLibrary
 import rs530anim.anim.ModelAnimator
 import rs530anim.cache.CacheSettings
 import rs530anim.cache.Js5Store
+import rs530anim.cache.TextureMaterials
 import rs530anim.model.Rs2Model
 import rs530anim.model.Rs2ModelLoader
 import kotlin.math.max
@@ -32,7 +33,9 @@ class ModelViewer : Application() {
         val frameNo = raw.getOrNull(2)?.toIntOrNull() ?: 0
 
         val settings = CacheSettings.load(null)
+        var materials: TextureMaterials? = null
         val model = Js5Store(settings).use { store ->
+            materials = runCatching { TextureMaterials.load(store) }.getOrNull()
             val loaded = Rs2ModelLoader.decode(store.model(modelId))
             if (seqId != null) {
                 val seq = AnimLibrary.loadSeq(store, seqId)
@@ -46,7 +49,7 @@ class ModelViewer : Application() {
         centerModel(model)
 
         val world = Group()
-        world.children.addAll(buildMeshes(model))
+        world.children.addAll(buildMeshes(model, materials))
         // Lighting is already baked into face colours (SoftwareModel). Extra
         // JavaFX lights wash that out into a flat mask.
         world.children += AmbientLight(Color.WHITE)
@@ -113,11 +116,11 @@ private fun fitDistance(model: Rs2Model): Double {
     return max * 3.0 + 80.0
 }
 
-private fun buildMeshes(model: Rs2Model): List<MeshView> {
+private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
     data class Tri(val a: Int, val b: Int, val c: Int, val color: Int)
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
-        val shaded = shadeFace(model, i)
+        val shaded = shadeFace(model, i, materials)
         tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], shaded)
     }
     return tris.groupBy { it.color }.map { (hsl, group) ->
@@ -132,7 +135,7 @@ private fun buildMeshes(model: Rs2Model): List<MeshView> {
             fun put(index: Int) {
                 // RS Y is down; JavaFX Y is up.
                 points[p++] = model.verticesX[index].toFloat()
-                points[p++] = -model.verticesY[index].toFloat()
+                points[p++] = model.verticesY[index].toFloat()
                 points[p++] = model.verticesZ[index].toFloat()
             }
             put(tri.a); put(tri.b); put(tri.c)
@@ -184,7 +187,15 @@ private fun centerModel(model: Rs2Model) {
     }
 }
 
-private fun shadeFace(model: Rs2Model, face: Int): Int {
+private fun faceHsl(model: Rs2Model, face: Int, materials: TextureMaterials?): Int {
+    val tex = model.faceTextures?.getOrNull(face)?.toInt()?.and(0xFFFF) ?: 0xFFFF
+    if (tex != 0xFFFF && materials != null) {
+        materials.solidHsl(tex)?.let { return it }
+    }
+    return model.faceColors[face].toInt() and 0xFFFF
+}
+
+private fun shadeFace(model: Rs2Model, face: Int, materials: TextureMaterials?): Int {
     val a = model.faceA[face]
     val b = model.faceB[face]
     val c = model.faceC[face]
@@ -216,5 +227,5 @@ private fun shadeFace(model: Rs2Model, face: Int): Int {
     var lightness = LIGHT_AMBIENT + (LIGHT_X * nx + LIGHT_Y * ny + LIGHT_Z * nz) / denom
     if (lightness < 2) lightness = 2
     if (lightness > 126) lightness = 126
-    return Hsl.multiplyLightness(model.faceColors[face].toInt() and 0xFFFF, lightness)
+    return Hsl.multiplyLightness(faceHsl(model, face, materials), lightness)
 }
