@@ -83,6 +83,70 @@ class OpCurve : TextureOp(1, true) {
     }
 }
 
+class OpColorGradient : TextureOp(1, false) {
+    private var samples = arrayOf(intArrayOf(0, 0, 0, 0), intArrayOf(4096, 4096, 4096, 4096))
+    private val colors = IntArray(257)
+
+    override fun decode(code: Int, b: Rs2Buffer) {
+        if (code != 0) return
+        if (b.g1() != 0) return
+        samples = Array(b.g1()) {
+            intArrayOf(b.g2(), b.g1() shl 4, b.g1() shl 4, b.g1() shl 4)
+        }
+    }
+
+    override fun postDecode() {
+        val n = samples.size
+        if (n == 0) return
+        for (i in 0 until 257) {
+            val t = i shl 4
+            var k = 0
+            while (k < n && t >= samples[k][0]) k++
+            val r: Int; val g: Int; val bl: Int
+            if (k < n) {
+                val nxt = samples[k]
+                if (k > 0) {
+                    val prev = samples[k - 1]
+                    val u = ((t - prev[0]) shl 12) / (nxt[0] - prev[0]).coerceAtLeast(1)
+                    val v = 4096 - u
+                    r = prev[1] * v + nxt[1] * u shr 12
+                    g = prev[2] * v + nxt[2] * u shr 12
+                    bl = prev[3] * v + nxt[3] * u shr 12
+                } else {
+                    r = nxt[1]; g = nxt[2]; bl = nxt[3]
+                }
+            } else {
+                val last = samples[n - 1]
+                r = last[1]; g = last[2]; bl = last[3]
+            }
+            colors[i] = (bl shr 4).coerceIn(0, 255) or
+                ((g shr 4).coerceIn(0, 255) shl 8) or
+                ((r shr 4).coerceIn(0, 255) shl 16)
+        }
+    }
+
+    override fun colorOut(y: Int): Array<IntArray> {
+        val (row, miss) = color!!.row(y)
+        if (miss) {
+            val src = childMono(0, y)
+            for (x in src.indices) {
+                val packed = colors[(src[x] shr 4).coerceIn(0, 256)]
+                row[0][x] = packed shr 12 and 0xFF0
+                row[1][x] = packed shr 4 and 0xFF0
+                row[2][x] = (packed and 0xFF) shl 4
+            }
+        }
+        return row
+    }
+}
+
+class OpEmboss : TextureOp(1, true) {
+    override fun decode(code: Int, b: Rs2Buffer) {
+        if (code in 0..2) b.g2()
+    }
+    override fun monoOut(y: Int): IntArray = childMono(0, y)
+}
+
 class OpFractal : TextureOp(0, true) {
     private var normalize = true
     private var octaves = 4
