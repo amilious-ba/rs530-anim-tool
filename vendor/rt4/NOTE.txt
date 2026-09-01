@@ -1,0 +1,21 @@
+Reference copies from https://github.com/amilious-ba/AmiliousScape-Client
+path: client/src/main/java/rt4/
+Not on the Gradle compile path (they need Node, Js5, JagString, annotations).
+
+Pulled:
+  Buffer.java          trimmed methods we use; full class was pasted earlier
+  RawModel.java        decodeOld / decodeNew, vertexBones, createBones
+  Model.java           method4553 / method4555 / method4558 (apply frames)
+  SoftwareModel.java   method4569 / method4567 / method4577 (rotate/translate/scale verts)
+  GlModel.java         HD twin; preview uses SoftwareModel math first
+  AnimFrame.java       frame decode
+  AnimBase.java        types[], bones[][] label lists
+  AnimFrameset.java    first u16 of frame bytes = baseId
+  SeqType.java         opcode 1 frames+delays, opcode 9 looptype
+  SeqTypeList.java     cache loader (extras hook goes next to this)
+  ColorUtils.java      HSL later
+  MathUtils.java
+
+Kotlin ports so far:
+  Rs2Buffer.kt         Buffer g1/g2/gsmart
+  Rs2ModelLoader.kt    RawModel decodeOld + decodeNew (geometry + bones only)

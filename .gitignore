@@ -1,0 +1,11 @@
+.gradle/
+build/
+.idea/
+*.iml
+out/
+.kotlin/
+samples/*.dat
+samples/*.DAT
+cache/**/*.dat
+!cache/**/.gitkeep
+extras/
