@@ -390,7 +390,6 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         view.cullFace = CullFace.NONE
         view.drawMode = DrawMode.FILL
         val hsl = group.first().color
-        val base = if (tex != 0xFFFF) materials?.solidHsl(tex) ?: (hsl) else hsl
         view.material = PhongMaterial(Hsl.toFx(hsl)).apply {
             specularColor = Color.BLACK
             specularPower = 1.0
@@ -398,10 +397,8 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
                 val img = rs530anim.tex.TextureLibrary.image(tex)
                 if (img != null) {
                     diffuseMap = img
-                    diffuseColor = Hsl.toFx(base)
-                } else {
-                    diffuseColor = Hsl.toFx(base)
                 }
+                diffuseColor = Hsl.toFx(hsl)
             }
         }
         view
@@ -505,10 +502,6 @@ private fun centerModel(model: Rs2Model) {
 }
 
 private fun faceHsl(model: Rs2Model, face: Int, materials: TextureMaterials?): Int {
-    val tex = model.faceTextures?.getOrNull(face)?.toInt()?.and(0xFFFF) ?: 0xFFFF
-    if (tex != 0xFFFF && materials != null) {
-        materials.solidHsl(tex)?.let { return it }
-    }
     return model.faceColors[face].toInt() and 0xFFFF
 }
 
