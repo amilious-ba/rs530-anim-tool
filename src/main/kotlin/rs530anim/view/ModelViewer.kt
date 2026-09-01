@@ -404,7 +404,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
                 val img = rs530anim.tex.TextureLibrary.image(tex)
                 if (img != null) {
                     diffuseMap = img
-                    diffuseColor = Color.WHITE
+                    diffuseColor = Hsl.toFx(hsl)
                 } else {
                     diffuseColor = Hsl.toFx(hsl)
                 }

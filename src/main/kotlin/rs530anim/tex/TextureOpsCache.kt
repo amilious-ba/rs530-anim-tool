@@ -3,6 +3,117 @@ package rs530anim.tex
 import rs530anim.model.Rs2Buffer
 import java.util.Random
 
+class OpBrick : TextureOp(0, true) {
+    private var nx = 1
+    private var ny = 1
+    private var thick = 204
+    override fun decode(code: Int, b: Rs2Buffer) {
+        when (code) {
+            0 -> nx = b.g1().coerceAtLeast(1)
+            1 -> ny = b.g1().coerceAtLeast(1)
+            2 -> thick = b.g2()
+        }
+    }
+    override fun monoOut(y: Int): IntArray {
+        val (row, miss) = mono!!.row(y)
+        if (!miss) return row
+        val yf = TextureContext.heightFractions[y]
+        val periodY = (4096 / ny).coerceAtLeast(1)
+        val periodX = (4096 / nx).coerceAtLeast(1)
+        for (x in row.indices) {
+            val xf = TextureContext.widthFractions[x]
+            var cell = nx * xf shr 12
+            val my = yf % periodY * ny
+            val mx = xf % periodX * nx
+            if (thick > my) {
+                cell -= yf * ny shr 12
+                while (cell < 0) cell += 4
+                while (cell > 3) cell -= 4
+                row[x] = if (cell != 1 || thick > mx) 0 else 4096
+                continue
+            }
+            if (mx < thick) {
+                cell -= yf * ny shr 12
+                while (cell < 0) cell += 4
+                while (cell > 3) cell -= 4
+                row[x] = if (cell > 0) 0 else 4096
+                continue
+            }
+            row[x] = 4096
+        }
+        return row
+    }
+}
+
+class OpScribble : TextureOp(0, true) {
+    private var seed = 0
+    private var count = 2000
+    private var length = 16
+    private var base = 0
+    private var spread = 4096
+    override fun decode(code: Int, b: Rs2Buffer) {
+        when (code) {
+            0 -> seed = b.g1()
+            1 -> count = b.g2()
+            2 -> length = b.g1()
+            3 -> base = b.g2()
+            4 -> spread = b.g2()
+        }
+    }
+    override fun postDecode() = TextureContext.ensureTrig()
+    override fun monoOut(y: Int): IntArray {
+        val (rows, miss) = mono!!.allRows()
+        if (miss) {
+            for (r in rows) r.fill(0)
+            val rng = Random(seed.toLong())
+            val half = spread shr 1
+            val wmask = TextureContext.widthMask
+            val hmask = TextureContext.heightMask
+            repeat(count) {
+                val ang = if (spread > 0) base + rng.nextInt(spread) - half else base
+                val x0 = rng.nextInt(TextureContext.width)
+                val y0 = rng.nextInt(TextureContext.height)
+                val a = ang shr 4 and 0xFF
+                val x1 = x0 + (length * TextureContext.cosine[a] shr 12)
+                val y1 = y0 + (TextureContext.sine[a] * length shr 12)
+                val dx = x1 - x0
+                val dy = y1 - y0
+                if (dx == 0 && dy == 0) return@repeat
+                val swap = kotlin.math.abs(dy) > kotlin.math.abs(dx)
+                var ax = x0; var ay = y0; var bx = x1; var by = y1
+                if (swap) {
+                    val t = ax; ax = ay; ay = t
+                    val t2 = bx; bx = by; by = t2
+                }
+                if (ax > bx) {
+                    val t = ax; ax = bx; bx = t
+                    val t2 = ay; ay = by; by = t2
+                }
+                val adx = bx - ax
+                var ady = by - ay
+                if (ady < 0) ady = -ady
+                var err = -adx / 2
+                var cy = ay
+                val step = if (by <= ay) -1 else 1
+                val slope = if (adx == 0) 0 else 2048 / adx
+                val jitter = 1024 - (rng.nextInt(4096) shr 2)
+                for (x in ax until bx) {
+                    err += ady
+                    val v = slope * (x - ax) + jitter + 1024
+                    val yy = cy and hmask
+                    if (err > 0) {
+                        err -= adx
+                        cy += step
+                    }
+                    val xx = x and wmask
+                    if (swap) rows[xx][yy] = v else rows[yy][xx] = v
+                }
+            }
+        }
+        return rows[y]
+    }
+}
+
 class OpHGrad : TextureOp(0, true) {
     override fun monoOut(y: Int) = TextureContext.widthFractions
 }

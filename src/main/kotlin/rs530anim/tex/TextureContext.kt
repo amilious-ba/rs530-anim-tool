@@ -54,6 +54,8 @@ object TextureContext {
         }
     }
 
+    fun ensureTrig() {}
+
     fun perm(seed: Int): ByteArray {
         val out = ByteArray(512)
         val rng = java.util.Random(seed.toLong())
@@ -77,6 +79,11 @@ class MonoCache(private val height: Int, width: Int) {
         val miss = !ready[y]
         ready[y] = true
         return rows[y] to miss
+    }
+    fun allRows(): Pair<Array<IntArray>, Boolean> {
+        val miss = ready.any { !it }
+        ready.fill(true)
+        return rows to miss
     }
 }
 
