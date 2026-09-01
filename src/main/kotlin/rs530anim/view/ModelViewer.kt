@@ -47,12 +47,9 @@ class ModelViewer : Application() {
 
         val world = Group()
         world.children.addAll(buildMeshes(model))
-        world.children += AmbientLight(Color.color(0.55, 0.55, 0.55))
-        val sun = javafx.scene.PointLight(Color.WHITE)
-        sun.translateX = -200.0
-        sun.translateY = 80.0
-        sun.translateZ = -200.0
-        world.children += sun
+        // Lighting is already baked into face colours (SoftwareModel). Extra
+        // JavaFX lights wash that out into a flat mask.
+        world.children += AmbientLight(Color.WHITE)
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
         val pitch = Rotate(-20.0, Rotate.X_AXIS)
@@ -191,23 +188,33 @@ private fun shadeFace(model: Rs2Model, face: Int): Int {
     val a = model.faceA[face]
     val b = model.faceB[face]
     val c = model.faceC[face]
-    val ax = model.verticesX[b] - model.verticesX[a]
-    val ay = model.verticesY[b] - model.verticesY[a]
-    val az = model.verticesZ[b] - model.verticesZ[a]
-    val bx = model.verticesX[c] - model.verticesX[a]
-    val by = model.verticesY[c] - model.verticesY[a]
-    val bz = model.verticesZ[c] - model.verticesZ[a]
-    val nx = ay * bz - az * by
-    val ny = az * bx - ax * bz
-    val nz = ax * by - ay * bx
-    val mag = kotlin.math.sqrt((nx.toLong() * nx + ny.toLong() * ny + nz.toLong() * nz).toDouble()).toInt().coerceAtLeast(1)
+    var nx = (model.verticesY[b] - model.verticesY[a]) * (model.verticesZ[c] - model.verticesZ[a]) -
+        (model.verticesY[c] - model.verticesY[a]) * (model.verticesZ[b] - model.verticesZ[a])
+    var ny = (model.verticesZ[b] - model.verticesZ[a]) * (model.verticesX[c] - model.verticesX[a]) -
+        (model.verticesZ[c] - model.verticesZ[a]) * (model.verticesX[b] - model.verticesX[a])
+    var nz = (model.verticesX[b] - model.verticesX[a]) * (model.verticesY[c] - model.verticesY[a]) -
+        (model.verticesX[c] - model.verticesX[a]) * (model.verticesY[b] - model.verticesY[a])
+    // RawModel.calculateNormals: shrink to ±8192 then scale to length 256.
+    while (
+        nx > 8192 || ny > 8192 || nz > 8192 ||
+        nx < -8192 || ny < -8192 || nz < -8192
+    ) {
+        nx = nx shr 1
+        ny = ny shr 1
+        nz = nz shr 1
+    }
+    var mag = kotlin.math.sqrt((nx.toLong() * nx + ny.toLong() * ny + nz.toLong() * nz).toDouble()).toInt()
+    if (mag <= 0) mag = 1
+    nx = nx * 256 / mag
+    ny = ny * 256 / mag
+    nz = nz * 256 / mag
     val sun = kotlin.math.sqrt(
         (LIGHT_X * LIGHT_X + LIGHT_Y * LIGHT_Y + LIGHT_Z * LIGHT_Z).toDouble(),
     ).toInt()
-    val denom = ((LIGHT_ATTEN * sun shr 8) + (LIGHT_ATTEN * sun shr 9)).coerceAtLeast(1)
-    var lightness = LIGHT_AMBIENT + (nx / mag * LIGHT_X + ny / mag * LIGHT_Y + nz / mag * LIGHT_Z) * mag / denom
-    // Keep a visible range so unlit backsides are dark, not black holes.
-    if (lightness < 16) lightness = 16
-    if (lightness > 192) lightness = 192
+    val local108 = LIGHT_ATTEN * sun shr 8
+    val denom = (local108 + local108 / 2).coerceAtLeast(1)
+    var lightness = LIGHT_AMBIENT + (LIGHT_X * nx + LIGHT_Y * ny + LIGHT_Z * nz) / denom
+    if (lightness < 2) lightness = 2
+    if (lightness > 126) lightness = 126
     return Hsl.multiplyLightness(model.faceColors[face].toInt() and 0xFFFF, lightness)
 }
