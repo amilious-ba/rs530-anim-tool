@@ -89,6 +89,7 @@ class ModelViewer : Application() {
 
         val world = Group()
         world.children += AmbientLight(Color.WHITE)
+        world.children += groundMarker(model)
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
         val pitch = Rotate(-20.0, Rotate.X_AXIS)
@@ -174,7 +175,12 @@ class ModelViewer : Application() {
                 }
                 animator.method4569(kind, intArrayOf(lab), dx, dy, dz)
             }
-            frameLabel.text = if (seqFrames.isEmpty()) "no seq" else "frame $currentFrame / ${seqFrames.size}"
+            frameLabel.text = if (seqFrames.isEmpty()) {
+                "no seq"
+            } else {
+                val d = seqDelays.getOrElse(currentFrame) { 5 }
+                "frame $currentFrame / ${seqFrames.size}  ${d} ticks (${d * 20} ms)"
+            }
             rebuild()
         }
 
@@ -201,6 +207,7 @@ class ModelViewer : Application() {
                     return
                 }
                 val delayTicks = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
+                // 530 client cycle is 20ms; frameDelay is in those cycles.
                 if (now - accNs >= delayTicks * 20_000_000L) {
                     accNs = now
                     val next = (currentFrame + 1) % seqFrames.size
@@ -384,6 +391,42 @@ private const val LIGHT_ATTEN = 768
 private const val LIGHT_X = -50
 private const val LIGHT_Y = -10
 private const val LIGHT_Z = -50
+
+/** Wire rectangle on XZ at the feet, plus a notch on −Z (toward the default camera). */
+private fun groundMarker(model: Rs2Model): MeshView {
+    var minX = 0; var maxX = 0; var minY = 0; var minZ = 0; var maxZ = 0
+    if (model.vertexCount > 0) {
+        minX = model.verticesX.minOrNull() ?: 0
+        maxX = model.verticesX.maxOrNull() ?: 0
+        minY = model.verticesY.minOrNull() ?: 0
+        minZ = model.verticesZ.minOrNull() ?: 0
+        maxZ = model.verticesZ.maxOrNull() ?: 0
+    }
+    val pad = 12f
+    val y = minY.toFloat()
+    val x0 = minX.toFloat() - pad
+    val x1 = maxX.toFloat() + pad
+    val z0 = minZ.toFloat() - pad
+    val z1 = maxZ.toFloat() + pad
+    val midX = (x0 + x1) / 2f
+    val notch = z0 - 18f
+    val mesh = TriangleMesh()
+    mesh.points.addAll(
+        x0, y, z0, x1, y, z0, x1, y, z1, x0, y, z1,
+        midX - 8f, y, z0, midX + 8f, y, z0, midX, y, notch,
+    )
+    mesh.texCoords.addAll(0f, 0f)
+    mesh.faces.addAll(
+        0, 0, 1, 0, 2, 0,
+        0, 0, 2, 0, 3, 0,
+        4, 0, 5, 0, 6, 0,
+    )
+    val view = MeshView(mesh)
+    view.cullFace = CullFace.NONE
+    view.drawMode = DrawMode.LINE
+    view.material = PhongMaterial(Color.web("#8ec07c"))
+    return view
+}
 
 private fun centerModel(model: Rs2Model) {
     if (model.vertexCount == 0) return
