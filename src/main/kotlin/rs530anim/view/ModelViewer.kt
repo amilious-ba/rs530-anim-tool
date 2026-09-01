@@ -43,10 +43,16 @@ class ModelViewer : Application() {
             }
             loaded
         }
+        centerModel(model)
 
         val world = Group()
         world.children.addAll(buildMeshes(model))
-        world.children += AmbientLight(Color.WHITE)
+        world.children += AmbientLight(Color.color(0.55, 0.55, 0.55))
+        val sun = javafx.scene.PointLight(Color.WHITE)
+        sun.translateX = -200.0
+        sun.translateY = 80.0
+        sun.translateZ = -200.0
+        world.children += sun
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
         val pitch = Rotate(-20.0, Rotate.X_AXIS)
@@ -114,7 +120,8 @@ private fun buildMeshes(model: Rs2Model): List<MeshView> {
     data class Tri(val a: Int, val b: Int, val c: Int, val color: Int)
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
-        tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], model.faceColors[i].toInt() and 0xFFFF)
+        val shaded = shadeFace(model, i)
+        tris += Tri(model.faceA[i], model.faceB[i], model.faceC[i], shaded)
     }
     return tris.groupBy { it.color }.map { (hsl, group) ->
         val mesh = TriangleMesh()
@@ -148,4 +155,59 @@ private fun buildMeshes(model: Rs2Model): List<MeshView> {
         }
         view
     }
+}
+
+/** Same sun as RawModel.createModel(..., -50, -10, -50) with ambient 64 / attenuation 768. */
+private const val LIGHT_AMBIENT = 64
+private const val LIGHT_ATTEN = 768
+private const val LIGHT_X = -50
+private const val LIGHT_Y = -10
+private const val LIGHT_Z = -50
+
+private fun centerModel(model: Rs2Model) {
+    if (model.vertexCount == 0) return
+    var minX = Int.MAX_VALUE
+    var minY = Int.MAX_VALUE
+    var minZ = Int.MAX_VALUE
+    var maxX = Int.MIN_VALUE
+    var maxY = Int.MIN_VALUE
+    var maxZ = Int.MIN_VALUE
+    for (i in 0 until model.vertexCount) {
+        minX = minOf(minX, model.verticesX[i]); maxX = maxOf(maxX, model.verticesX[i])
+        minY = minOf(minY, model.verticesY[i]); maxY = maxOf(maxY, model.verticesY[i])
+        minZ = minOf(minZ, model.verticesZ[i]); maxZ = maxOf(maxZ, model.verticesZ[i])
+    }
+    val cx = (minX + maxX) / 2
+    val cy = (minY + maxY) / 2
+    val cz = (minZ + maxZ) / 2
+    for (i in 0 until model.vertexCount) {
+        model.verticesX[i] -= cx
+        model.verticesY[i] -= cy
+        model.verticesZ[i] -= cz
+    }
+}
+
+private fun shadeFace(model: Rs2Model, face: Int): Int {
+    val a = model.faceA[face]
+    val b = model.faceB[face]
+    val c = model.faceC[face]
+    val ax = model.verticesX[b] - model.verticesX[a]
+    val ay = model.verticesY[b] - model.verticesY[a]
+    val az = model.verticesZ[b] - model.verticesZ[a]
+    val bx = model.verticesX[c] - model.verticesX[a]
+    val by = model.verticesY[c] - model.verticesY[a]
+    val bz = model.verticesZ[c] - model.verticesZ[a]
+    val nx = ay * bz - az * by
+    val ny = az * bx - ax * bz
+    val nz = ax * by - ay * bx
+    val mag = kotlin.math.sqrt((nx.toLong() * nx + ny.toLong() * ny + nz.toLong() * nz).toDouble()).toInt().coerceAtLeast(1)
+    val sun = kotlin.math.sqrt(
+        (LIGHT_X * LIGHT_X + LIGHT_Y * LIGHT_Y + LIGHT_Z * LIGHT_Z).toDouble(),
+    ).toInt()
+    val denom = ((LIGHT_ATTEN * sun shr 8) + (LIGHT_ATTEN * sun shr 9)).coerceAtLeast(1)
+    var lightness = LIGHT_AMBIENT + (nx / mag * LIGHT_X + ny / mag * LIGHT_Y + nz / mag * LIGHT_Z) * mag / denom
+    // Keep a visible range so unlit backsides are dark, not black holes.
+    if (lightness < 16) lightness = 16
+    if (lightness > 192) lightness = 192
+    return Hsl.multiplyLightness(model.faceColors[face].toInt() and 0xFFFF, lightness)
 }
