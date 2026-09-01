@@ -131,12 +131,9 @@ private fun fitDistance(model: Rs2Model): Double {
 
 private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
     data class Tri(val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
-    val minX = model.verticesX.minOrNull() ?: 0
-    val maxX = model.verticesX.maxOrNull() ?: 1
-    val minZ = model.verticesZ.minOrNull() ?: 0
-    val maxZ = model.verticesZ.maxOrNull() ?: 1
-    val spanX = (maxX - minX).coerceAtLeast(1).toFloat()
-    val spanZ = (maxZ - minZ).coerceAtLeast(1).toFloat()
+    val minY = model.verticesY.minOrNull() ?: 0
+    val maxY = model.verticesY.maxOrNull() ?: 1
+    val spanY = (maxY - minY).coerceAtLeast(1).toFloat()
     val tris = ArrayList<Tri>(model.faceCount)
     for (i in 0 until model.faceCount) {
         val tex = model.faceTextures?.getOrNull(i)?.toInt()?.and(0xFFFF) ?: 0xFFFF
@@ -156,8 +153,13 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
             points[p++] = model.verticesX[index].toFloat()
             points[p++] = model.verticesY[index].toFloat()
             points[p++] = model.verticesZ[index].toFloat()
-            uvs[t++] = (model.verticesX[index] - minX) / spanX
-            uvs[t++] = (model.verticesZ[index] - minZ) / spanZ
+            val u = (kotlin.math.atan2(
+                model.verticesX[index].toDouble(),
+                model.verticesZ[index].toDouble(),
+            ) / (2.0 * Math.PI) + 0.5).toFloat()
+            val v = (model.verticesY[index] - minY) / spanY
+            uvs[t++] = u
+            uvs[t++] = v.coerceIn(0f, 1f)
         }
         for (tri in group) {
             put(tri.a); put(tri.b); put(tri.c)
