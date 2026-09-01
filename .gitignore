@@ -8,4 +8,4 @@ samples/*.dat
 samples/*.DAT
 cache/**/*.dat
 !cache/**/.gitkeep
-extras/
+/extras/
