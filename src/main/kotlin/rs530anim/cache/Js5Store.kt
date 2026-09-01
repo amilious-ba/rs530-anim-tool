@@ -59,6 +59,10 @@ class Js5Store(
     fun seqBytes(id: Int): ByteArray {
         val path = cache.seqPath(id)
         cache.read(path)?.let { return it }
+        bundled("seq/$id.dat")?.let {
+            cache.write(path, it)
+            return it
+        }
         val bytes = file(Js5Archives.SEQUENCES, id ushr 7, id and 0x7F)
         cache.write(path, bytes)
         return bytes
@@ -67,6 +71,10 @@ class Js5Store(
     fun baseBytes(id: Int): ByteArray {
         val path = cache.basePath(id)
         cache.read(path)?.let { return it }
+        bundled("bases/$id.dat")?.let {
+            cache.write(path, it)
+            return it
+        }
         val bytes = file(Js5Archives.BASES, id, 0)
         cache.write(path, bytes)
         return bytes
@@ -83,12 +91,23 @@ class Js5Store(
                 }
             }
         }
+        val bundledDir = "/rs530anim/frames/$id"
+        val fromJar = (0..63).mapNotNull { fid ->
+            bundled("frames/$id/$fid.dat")?.let { fid to it }
+        }.toMap()
+        if (fromJar.isNotEmpty()) {
+            for ((fid, bytes) in fromJar) cache.write(dir.resolve("$fid.dat"), bytes)
+            return fromJar
+        }
         val files = groupFiles(Js5Archives.FRAMES, id)
         for ((fid, bytes) in files) {
             cache.write(dir.resolve("$fid.dat"), bytes)
         }
         return files
     }
+
+    private fun bundled(path: String): ByteArray? =
+        Js5Store::class.java.getResourceAsStream("/rs530anim/$path")?.readBytes()
 
     override fun close() {
         net?.close()
