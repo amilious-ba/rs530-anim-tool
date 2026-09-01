@@ -45,6 +45,12 @@ class Js5Store(
     fun model(id: Int): ByteArray {
         val path = cache.modelPath(id)
         cache.read(path)?.let { return it }
+        val bundled = Js5Store::class.java.getResourceAsStream("/rs530anim/models/$id.dat")
+        if (bundled != null) {
+            val bytes = bundled.readBytes()
+            cache.write(path, bytes)
+            return bytes
+        }
         val bytes = file(Js5Archives.MODELS, id, 0)
         cache.write(path, bytes)
         return bytes
