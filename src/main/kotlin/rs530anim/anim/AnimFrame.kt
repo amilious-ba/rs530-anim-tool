@@ -21,6 +21,43 @@ class AnimFrame(
 ) {
     val length: Int get() = indices.size
 
+    fun valueAt(index: Int): Triple<Int, Int, Int> =
+        Triple(x[index].toInt(), y[index].toInt(), z[index].toInt())
+
+    /** First used group whose base slot includes this vskin and type. */
+    fun indexForLabel(label: Int, type: Int): Int? {
+        for (i in indices.indices) {
+            val slot = indices[i].toInt()
+            if (base.types[slot] == type && label in base.bones[slot]) return i
+        }
+        return null
+    }
+
+    fun valuesForLabel(label: Int, type: Int): Triple<Int, Int, Int>? {
+        val i = indexForLabel(label, type) ?: return null
+        return valueAt(i)
+    }
+
+    fun edits(): List<GroupEdit> = indices.indices.map { i ->
+        GroupEdit(
+            slot = indices[i].toInt(),
+            x = x[i].toInt(),
+            y = y[i].toInt(),
+            z = z[i].toInt(),
+            flags = flags[i].toInt() and 0x3,
+        )
+    }
+
+    fun withLabelValues(label: Int, type: Int, dx: Int, dy: Int, dz: Int): AnimFrame {
+        val slot = base.slotFor(label, type)
+            ?: return this
+        val next = edits().toMutableList()
+        val existing = next.indexOfFirst { it.slot == slot }
+        val edit = GroupEdit(slot, dx, dy, dz, if (existing >= 0) next[existing].flags else 0)
+        if (existing >= 0) next[existing] = edit else next += edit
+        return fromEdits(base, next)
+    }
+
     data class GroupEdit(
         val slot: Int,
         val x: Int = 0,

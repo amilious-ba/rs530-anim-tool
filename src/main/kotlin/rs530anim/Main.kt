@@ -33,6 +33,46 @@ fun main(args: Array<String>) {
         "skins" -> MonkeySkins.print()
         "npcs", "npc" -> NpcCatalog.printNpcs(parsed.rest.joinToString(" "))
         "anims", "anim", "seqs" -> NpcCatalog.printAnims(parsed.rest.joinToString(" "))
+        "export" -> {
+            val src = parsed.rest.getOrNull(0)?.toIntOrNull()
+            val dest = parsed.rest.getOrNull(1)?.toIntOrNull() ?: src
+            if (src == null || dest == null) {
+                System.err.println("Usage: export <cacheSeqId> [extrasSeqId]")
+                kotlin.system.exitProcess(1)
+            }
+            CacheSettings.load(null)
+            Js5Store(CacheSettings()).use { store ->
+                val seq = AnimLibrary.loadSeq(store, src)
+                val frames = seq.frames.map { AnimLibrary.frameOf(store, it) }
+                val def = rs530anim.extras.SeqExtras(
+                    id = dest,
+                    baseId = frames.first().base.id,
+                    loop = seq.looptype,
+                    priority = seq.priority,
+                    frames = frames.indices.toList(),
+                    delays = seq.delays.toList(),
+                )
+                val path = rs530anim.extras.ExtrasStore.save(def, frames)
+                println("exported seq $src -> extras $dest  $path")
+            }
+        }
+        "import" -> {
+            val id = parsed.rest.getOrNull(0)?.toIntOrNull()
+            if (id == null) {
+                System.err.println("Usage: import <extrasSeqId>")
+                kotlin.system.exitProcess(1)
+            }
+            val (def, frames) = rs530anim.extras.ExtrasStore.load(id) { baseId ->
+                CacheSettings.load(null)
+                Js5Store(CacheSettings()).use { it.let { store ->
+                    rs530anim.anim.AnimBase.decode(baseId, store.baseBytes(baseId))
+                } }
+            }
+            println("imported extras seq ${def.id} base=${def.baseId} frames=${frames.size} delays=${def.delays}")
+            frames.forEachIndexed { i, f ->
+                println("  frame $i groups=${f.length}")
+            }
+        }
         "view" -> {
             val rest = parsed.rest
             when {

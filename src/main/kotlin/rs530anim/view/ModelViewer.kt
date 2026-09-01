@@ -17,11 +17,14 @@ import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ListView
 import javafx.scene.control.Slider
+import javafx.scene.control.TextField
 import javafx.scene.control.ToggleButton
 import javafx.scene.control.ToggleGroup
 import rs530anim.anim.AnimFrame
 import rs530anim.anim.SeqType
 import rs530anim.anim.TransformType
+import rs530anim.extras.ExtrasStore
+import rs530anim.extras.SeqExtras
 import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
@@ -82,15 +85,20 @@ class ModelViewer : Application() {
             }
             loaded
         }
-        var seqFrames: List<AnimFrame> = emptyList()
+        var seqFrames: MutableList<AnimFrame> = mutableListOf()
+        var seqIdLoaded = seqId
+        var seqLoop = 0
+        var seqPriority = 5
         var seqDelays = IntArray(0)
         if (seqId != null) {
             try {
                 Js5Store(settings).use { store ->
                     val seq = AnimLibrary.loadSeq(store, seqId)
-                    seqFrames = seq.frames.map { AnimLibrary.frameOf(store, it) }
+                    seqFrames = seq.frames.map { AnimLibrary.frameOf(store, it) }.toMutableList()
                     seqDelays = seq.delays
-                    println("seq $seqId frames=${seq.length}")
+                    seqLoop = seq.looptype
+                    seqPriority = seq.priority
+                    println("seq $seqId frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id}")
                 }
             } catch (e: Exception) {
                 System.err.println("seq $seqId not loaded: ${e.message}")
@@ -151,8 +159,9 @@ class ModelViewer : Application() {
         val rotBtn = ToggleButton("rotate").apply { toggleGroup = typeGroup; isSelected = true }
         val moveBtn = ToggleButton("translate").apply { toggleGroup = typeGroup }
 
-        fun sliderMax(): Double = if (rotBtn.isSelected) 2047.0 else 128.0
-        fun sliderMin(): Double = if (rotBtn.isSelected) 0.0 else -128.0
+        fun editType(): Int = if (rotBtn.isSelected) TransformType.ROTATE else TransformType.TRANSLATE
+        fun sliderMax(): Double = if (rotBtn.isSelected) 2047.0 else 512.0
+        fun sliderMin(): Double = if (rotBtn.isSelected) 0.0 else -512.0
         val sx = Slider(sliderMin(), sliderMax(), 0.0)
         val sy = Slider(sliderMin(), sliderMax(), 0.0)
         val sz = Slider(sliderMin(), sliderMax(), 0.0)
@@ -176,46 +185,154 @@ class ModelViewer : Application() {
             showLabel(selectedLabel())
         }
 
+        var syncingSliders = false
+
+        fun loadSlidersFromFrame() {
+            if (seqFrames.isEmpty()) return
+            currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
+            val frame = seqFrames[currentFrame]
+            val lab = selectedLabel()
+            val kind = editType()
+            val values = if (lab == null) null else frame.valuesForLabel(lab, kind)
+            val slot = if (lab == null) null else frame.base.slotFor(lab, kind)
+            syncingSliders = true
+            sx.min = sliderMin(); sx.max = sliderMax()
+            sy.min = sliderMin(); sy.max = sliderMax()
+            sz.min = sliderMin(); sz.max = sliderMax()
+            sx.value = (values?.first ?: 0).toDouble()
+            sy.value = (values?.second ?: 0).toDouble()
+            sz.value = (values?.third ?: 0).toDouble()
+            syncingSliders = false
+            val typeName = TransformType.nameOf(kind)
+            xyzLabel.text = if (lab == null) {
+                "select a vskin"
+            } else if (slot == null) {
+                "vskin $lab has no $typeName slot in base ${frame.base.id}"
+            } else {
+                "base ${frame.base.id} slot $slot $typeName  dx ${sx.value.toInt()} dy ${sy.value.toInt()} dz ${sz.value.toInt()}"
+            }
+        }
+
+        fun writeSlidersIntoFrame() {
+            if (syncingSliders || seqFrames.isEmpty()) return
+            val lab = selectedLabel() ?: return
+            val kind = editType()
+            val frame = seqFrames[currentFrame]
+            if (frame.base.slotFor(lab, kind) == null) return
+            seqFrames[currentFrame] = frame.withLabelValues(
+                lab,
+                kind,
+                sx.value.toInt(),
+                sy.value.toInt(),
+                sz.value.toInt(),
+            )
+        }
+
         fun applyPose() {
             animator.restore(bind)
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 animator.apply(seqFrames[currentFrame])
             }
-            val lab = selectedLabel()
-            val dx = sx.value.toInt()
-            val dy = sy.value.toInt()
-            val dz = sz.value.toInt()
-            xyzLabel.text = "dx $dx  dy $dy  dz $dz"
-            if (lab != null && (dx != 0 || dy != 0 || dz != 0)) {
-                val kind = if (rotBtn.isSelected) TransformType.ROTATE else TransformType.TRANSLATE
-                if (kind == TransformType.ROTATE) {
-                    animator.method4569(TransformType.ORIGIN, intArrayOf(lab), 0, 0, 0)
-                }
-                animator.method4569(kind, intArrayOf(lab), dx, dy, dz)
-            }
             frameLabel.text = if (seqFrames.isEmpty()) {
                 "no seq"
             } else {
                 val d = seqDelays.getOrElse(currentFrame) { 5 }
-                "frame $currentFrame / ${seqFrames.size}  ${d} ticks (${d * 20} ms)"
+                "seq $seqIdLoaded  frame $currentFrame / ${seqFrames.size}  ${d} ticks (${d * 20} ms)"
             }
             rebuild()
         }
 
-        list.selectionModel.selectedIndexProperty().addListener { _, _, _ -> applyPose() }
-        frameSlider.valueProperty().addListener { _, _, _ -> applyPose() }
-        sx.valueProperty().addListener { _, _, _ -> applyPose() }
-        sy.valueProperty().addListener { _, _, _ -> applyPose() }
-        sz.valueProperty().addListener { _, _, _ -> applyPose() }
+        list.selectionModel.selectedIndexProperty().addListener { _, _, _ ->
+            loadSlidersFromFrame()
+            applyPose()
+        }
+        frameSlider.valueProperty().addListener { _, _, _ ->
+            loadSlidersFromFrame()
+            applyPose()
+        }
+        sx.valueProperty().addListener { _, _, _ ->
+            writeSlidersIntoFrame()
+            if (!syncingSliders) {
+                loadSlidersFromFrame()
+                applyPose()
+            }
+        }
+        sy.valueProperty().addListener { _, _, _ ->
+            writeSlidersIntoFrame()
+            if (!syncingSliders) {
+                loadSlidersFromFrame()
+                applyPose()
+            }
+        }
+        sz.valueProperty().addListener { _, _, _ ->
+            writeSlidersIntoFrame()
+            if (!syncingSliders) {
+                loadSlidersFromFrame()
+                applyPose()
+            }
+        }
         typeGroup.selectedToggleProperty().addListener { _, _, _ ->
-            sx.min = sliderMin(); sx.max = sliderMax(); sx.value = 0.0
-            sy.min = sliderMin(); sy.max = sliderMax(); sy.value = 0.0
-            sz.min = sliderMin(); sz.max = sliderMax(); sz.value = 0.0
+            loadSlidersFromFrame()
+            applyPose()
         }
 
         val playBtn = Button(if (seqFrames.isEmpty()) "play (no seq)" else "play")
         playBtn.isDisable = seqFrames.isEmpty()
+        val extrasIdField = TextField((seqIdLoaded ?: 9220).toString())
+        extrasIdField.prefWidth = 80.0
+        val exportBtn = Button("export extras")
+        val importBtn = Button("import extras")
+        val extrasLabel = Label(ExtrasStore.defaultRoot().toString())
+        extrasLabel.isWrapText = true
+        exportBtn.isDisable = seqFrames.isEmpty()
+        exportBtn.setOnAction {
+            val outId = extrasIdField.text.toIntOrNull() ?: return@setOnAction
+            val baseId = seqFrames.first().base.id
+            val delays = IntArray(seqFrames.size) { seqDelays.getOrElse(it) { 5 } }
+            val def = SeqExtras(
+                id = outId,
+                baseId = baseId,
+                loop = seqLoop,
+                priority = seqPriority,
+                frames = seqFrames.indices.toList(),
+                delays = delays.toList(),
+            )
+            val path = ExtrasStore.save(def, seqFrames)
+            extrasLabel.text = "wrote $path"
+            println("exported extras seq $outId base=$baseId frames=${seqFrames.size} -> $path")
+        }
+        importBtn.setOnAction {
+            val inId = extrasIdField.text.toIntOrNull() ?: return@setOnAction
+            val loadedBase = seqFrames.firstOrNull()?.base
+            if (loadedBase == null) {
+                extrasLabel.text = "load a cache seq first (need AnimBase)"
+                return@setOnAction
+            }
+            try {
+                val (def, frames) = ExtrasStore.load(inId) { requested ->
+                    require(requested == loadedBase.id) {
+                        "extras base $requested != loaded base ${loadedBase.id}"
+                    }
+                    loadedBase
+                }
+                seqFrames = frames.toMutableList()
+                seqDelays = def.delays.toIntArray()
+                seqLoop = def.loop
+                seqPriority = def.priority
+                seqIdLoaded = def.id
+                frameSlider.max = (seqFrames.size - 1).coerceAtLeast(0).toDouble()
+                frameSlider.value = 0.0
+                playBtn.isDisable = seqFrames.isEmpty()
+                exportBtn.isDisable = seqFrames.isEmpty()
+                extrasLabel.text = "loaded extras seq ${def.id}"
+                loadSlidersFromFrame()
+                applyPose()
+            } catch (e: Exception) {
+                extrasLabel.text = "import failed: ${e.message}"
+                System.err.println("import extras $inId: ${e.message}")
+            }
+        }
         var playing = false
         var accNs = 0L
         val timer = object : AnimationTimer() {
@@ -249,6 +366,11 @@ class ModelViewer : Application() {
             frameLabel,
             frameSlider,
             playBtn,
+            Label("extras seq id"),
+            extrasIdField,
+            exportBtn,
+            importBtn,
+            extrasLabel,
             Label("edit selected label"),
             rotBtn,
             moveBtn,
@@ -305,6 +427,8 @@ class ModelViewer : Application() {
         }
         stage.title = title
         stage.scene = Scene(pane, 1180.0, 720.0)
+        if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
+        applyPose()
         stage.show()
     }
 

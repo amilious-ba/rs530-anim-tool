@@ -112,7 +112,7 @@ sequence's own frame folder**, not packed cache frame ids.
 {
   "id": 90000,
   "baseId": 132,
-  "loop": true,
+  "loop": 0,
   "priority": 5,
   "frames": [0, 1, 2],
   "delays": [5, 5, 5]
@@ -123,7 +123,7 @@ sequence's own frame folder**, not packed cache frame ids.
 |------------|-----------|---------|
 | `id`       | int       | Sequence id the server/client will `animate(seqId)` with. Pick a high unused id. |
 | `baseId`   | int       | Existing AnimBase id. For monkey 132 **reuse the base already used by 220 / 223 / 1392**. Do not emit a new base. |
-| `loop`     | bool      | Maps to SeqType loop behaviour (`looptype` 2 when true, 0 when false). |
+| `loop`     | int       | SeqType `looptype` (0 default, 2 loop). |
 | `priority` | int       | Optional. SeqType opcode 5. Default 5. |
 | `frames`   | int[]     | Frame indices. File `extras/frames/<seqId>/<frames[i]>.dat`. |
 | `delays`   | int[]     | Per-frame delay in **client ticks** (same unit SeqType opcode 1 stores). Same length as `frames`. |
@@ -159,6 +159,24 @@ Encoder rules (must match `rt4.AnimFrame.<init>`):
   not author them.
 
 We never write a new AnimBase file. The client already has the monkey base.
+
+## Extras library (tool + client)
+
+No JavaFX. Copy or compile these sources into the client:
+
+- `rs530anim.extras.SeqExtras`
+- `rs530anim.extras.ExtrasStore`
+- `rs530anim.anim.AnimFrame` / `AnimBase`
+- `rs530anim.model.Rs2Buffer`
+
+```text
+gradlew.bat run --args="export 220 9220"
+gradlew.bat run --args="import 9220"
+```
+
+In the viewer: extras seq id field, Export / Import. Import needs a cache seq already loaded so the existing AnimBase is available.
+
+Client hook: `rs530anim.extras.ClientExtrasStub` (comment only). `SeqTypeList.get` / `AnimFrameset.get` check `extras/seq/<id>.json` first, then the live cache. Reuse `AnimBaseList.get(baseId)`.
 
 ### What we will not export
 

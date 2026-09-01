@@ -15,6 +15,9 @@ class AnimBase(
 ) {
     val transforms: Int get() = types.size
 
+    fun slotFor(label: Int, type: Int): Int? =
+        types.indices.firstOrNull { types[it] == type && label in bones[it] }
+
     fun encode(): ByteArray {
         val labels = bones.sumOf { it.size }
         val buf = Rs2Buffer(1 + transforms * (1 + 1 + 2 + 1) + labels)
