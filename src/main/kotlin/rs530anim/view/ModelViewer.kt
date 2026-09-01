@@ -1,5 +1,6 @@
 package rs530anim.view
 
+import javafx.animation.AnimationTimer
 import javafx.application.Application
 import javafx.geometry.Insets
 import javafx.scene.AmbientLight
@@ -8,8 +9,15 @@ import javafx.scene.PerspectiveCamera
 import javafx.scene.Scene
 import javafx.scene.SceneAntialiasing
 import javafx.scene.SubScene
+import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ListView
+import javafx.scene.control.Slider
+import javafx.scene.control.ToggleButton
+import javafx.scene.control.ToggleGroup
+import rs530anim.anim.AnimFrame
+import rs530anim.anim.SeqType
+import rs530anim.anim.TransformType
 import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
@@ -58,21 +66,28 @@ class ModelViewer : Application() {
                 loaded = loaded.attach(Rs2ModelLoader.decode(store.model(id)))
             }
             println("models ${modelIds.joinToString("+")} verts=${loaded.vertexCount} faces=${loaded.faceCount}")
-            if (seqId != null) {
-                val seq = AnimLibrary.loadSeq(store, seqId)
-                if (seq.length > 0) {
-                    val packed = seq.frames[frameNo.coerceIn(0, seq.length - 1)]
-                    ModelAnimator(loaded).apply(AnimLibrary.frameOf(store, packed))
-                }
-            }
             loaded
         }
+        var seqFrames: List<AnimFrame> = emptyList()
+        var seqDelays = IntArray(0)
+        if (seqId != null) {
+            try {
+                Js5Store(settings).use { store ->
+                    val seq = AnimLibrary.loadSeq(store, seqId)
+                    seqFrames = seq.frames.map { AnimLibrary.frameOf(store, it) }
+                    seqDelays = seq.delays
+                    println("seq $seqId frames=${seq.length}")
+                }
+            } catch (e: Exception) {
+                System.err.println("seq $seqId not loaded: ${e.message}")
+            }
+        }
         centerModel(model)
+        val animator = ModelAnimator(model)
+        val bind = animator.copyBindPose()
+        var currentFrame = frameNo.coerceIn(0, (seqFrames.size - 1).coerceAtLeast(0))
 
         val world = Group()
-        world.children.addAll(buildMeshes(model, materials))
-        // Lighting is already baked into face colours (SoftwareModel). Extra
-        // JavaFX lights wash that out into a flat mask.
         world.children += AmbientLight(Color.WHITE)
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
@@ -90,6 +105,38 @@ class ModelViewer : Application() {
         val highlight = Group()
         world.children += highlight
         val markMat = PhongMaterial(Color.YELLOW)
+        val meshGroup = Group()
+        meshGroup.children.addAll(buildMeshes(model, materials))
+        world.children.add(0, meshGroup)
+
+        val labels = model.uniqueVertexLabels()
+        val list = ListView<String>()
+        list.items.add("none")
+        for (lab in labels) {
+            list.items.add("vskin $lab  (${model.vertexCountForLabel(lab)} verts)")
+        }
+        list.selectionModel.select(0)
+        fun selectedLabel(): Int? {
+            val i = list.selectionModel.selectedIndex
+            return if (i <= 0) null else labels.getOrNull(i - 1)
+        }
+
+        val frameSlider = Slider(0.0, (seqFrames.size - 1).coerceAtLeast(0).toDouble(), currentFrame.toDouble())
+        frameSlider.isSnapToTicks = true
+        frameSlider.majorTickUnit = 1.0
+        frameSlider.blockIncrement = 1.0
+        val frameLabel = Label(if (seqFrames.isEmpty()) "no seq" else "frame $currentFrame / ${seqFrames.size}")
+
+        val typeGroup = ToggleGroup()
+        val rotBtn = ToggleButton("rotate").apply { toggleGroup = typeGroup; isSelected = true }
+        val moveBtn = ToggleButton("translate").apply { toggleGroup = typeGroup }
+
+        fun sliderMax(): Double = if (rotBtn.isSelected) 2047.0 else 128.0
+        fun sliderMin(): Double = if (rotBtn.isSelected) 0.0 else -128.0
+        val sx = Slider(sliderMin(), sliderMax(), 0.0)
+        val sy = Slider(sliderMin(), sliderMax(), 0.0)
+        val sz = Slider(sliderMin(), sliderMax(), 0.0)
+        val xyzLabel = Label("dx 0  dy 0  dz 0")
 
         fun showLabel(label: Int?) {
             highlight.children.clear()
@@ -104,27 +151,92 @@ class ModelViewer : Application() {
             }
         }
 
-        val labels = model.uniqueVertexLabels()
-        val list = ListView<String>()
-        list.items.add("none")
-        for (lab in labels) {
-            list.items.add("vskin $lab  (${model.vertexCountForLabel(lab)} verts)")
+        fun rebuild() {
+            meshGroup.children.setAll(buildMeshes(model, materials))
+            showLabel(selectedLabel())
         }
-        list.selectionModel.select(0)
-        list.selectionModel.selectedIndexProperty().addListener { _, _, idx ->
-            val i = idx.toInt()
-            showLabel(if (i <= 0) null else labels.getOrNull(i - 1))
+
+        fun applyPose() {
+            animator.restore(bind)
+            if (seqFrames.isNotEmpty()) {
+                currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
+                animator.apply(seqFrames[currentFrame])
+            }
+            val lab = selectedLabel()
+            val dx = sx.value.toInt()
+            val dy = sy.value.toInt()
+            val dz = sz.value.toInt()
+            xyzLabel.text = "dx $dx  dy $dy  dz $dz"
+            if (lab != null && (dx != 0 || dy != 0 || dz != 0)) {
+                val kind = if (rotBtn.isSelected) TransformType.ROTATE else TransformType.TRANSLATE
+                if (kind == TransformType.ROTATE) {
+                    animator.method4569(TransformType.ORIGIN, intArrayOf(lab), 0, 0, 0)
+                }
+                animator.method4569(kind, intArrayOf(lab), dx, dy, dz)
+            }
+            frameLabel.text = if (seqFrames.isEmpty()) "no seq" else "frame $currentFrame / ${seqFrames.size}"
+            rebuild()
+        }
+
+        list.selectionModel.selectedIndexProperty().addListener { _, _, _ -> applyPose() }
+        frameSlider.valueProperty().addListener { _, _, _ -> applyPose() }
+        sx.valueProperty().addListener { _, _, _ -> applyPose() }
+        sy.valueProperty().addListener { _, _, _ -> applyPose() }
+        sz.valueProperty().addListener { _, _, _ -> applyPose() }
+        typeGroup.selectedToggleProperty().addListener { _, _, _ ->
+            sx.min = sliderMin(); sx.max = sliderMax(); sx.value = 0.0
+            sy.min = sliderMin(); sy.max = sliderMax(); sy.value = 0.0
+            sz.min = sliderMin(); sz.max = sliderMax(); sz.value = 0.0
+        }
+
+        val playBtn = Button(if (seqFrames.isEmpty()) "play (no seq)" else "play")
+        playBtn.isDisable = seqFrames.isEmpty()
+        var playing = false
+        var accNs = 0L
+        val timer = object : AnimationTimer() {
+            override fun handle(now: Long) {
+                if (!playing || seqFrames.isEmpty()) return
+                if (accNs == 0L) {
+                    accNs = now
+                    return
+                }
+                val delayTicks = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
+                if (now - accNs >= delayTicks * 20_000_000L) {
+                    accNs = now
+                    val next = (currentFrame + 1) % seqFrames.size
+                    frameSlider.value = next.toDouble()
+                }
+            }
+        }
+        playBtn.setOnAction {
+            playing = !playing
+            playBtn.text = if (playing) "stop" else "play"
+            accNs = 0L
+            if (playing) timer.start() else timer.stop()
         }
 
         val side = VBox(
-            8.0,
+            6.0,
             Label("vskin labels"),
             list,
             Label("${model.vertexCount} verts  ${model.faceCount} faces"),
+            frameLabel,
+            frameSlider,
+            playBtn,
+            Label("edit selected label"),
+            rotBtn,
+            moveBtn,
+            Label("x"),
+            sx,
+            Label("y"),
+            sy,
+            Label("z"),
+            sz,
+            xyzLabel,
         )
         side.padding = Insets(8.0)
         side.prefWidth = 220.0
-        list.prefHeight = 480.0
+        list.prefHeight = 240.0
 
         val sub = SubScene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
         sub.fill = Color.rgb(32, 32, 36)

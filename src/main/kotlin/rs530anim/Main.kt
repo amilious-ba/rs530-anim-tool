@@ -52,7 +52,8 @@ fun main(args: Array<String>) {
                     if (row != null && models == listOf(nid) && nid != 132) {
                         println("note: no client modelIndices yet; trying model id == npc id (often wrong)")
                     }
-                    val extra = rest.drop(2)
+                    val extra = rest.drop(2).toMutableList()
+                    if (extra.isEmpty() && (row?.attack ?: 0) > 0) extra += row!!.attack.toString()
                     rs530anim.view.ModelViewer.open(listOf(models.joinToString("+")) + extra)
                 }
                 else -> rs530anim.view.ModelViewer.open(rest)
