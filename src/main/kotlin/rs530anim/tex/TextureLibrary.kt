@@ -6,9 +6,11 @@ import rs530anim.cache.Js5Store
 
 object TextureLibrary {
     private val images = HashMap<Int, Image>()
+    private val failed = HashSet<Int>()
 
     fun image(id: Int, store: Js5Store? = null): Image? {
         images[id]?.let { return it }
+        if (id in failed) return null
         val bytes = store?.let {
             try { it.textureBytes(id) } catch (e: Exception) { null }
         } ?: TextureLibrary::class.java.getResourceAsStream("/rs530anim/textures/$id.dat")?.readBytes()
@@ -20,6 +22,7 @@ object TextureLibrary {
             images[id] = img
             img
         } catch (e: Exception) {
+            failed += id
             System.err.println("texture $id graph: ${e.message}")
             null
         }

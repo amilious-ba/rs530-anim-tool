@@ -47,6 +47,7 @@ abstract class TextureOp(val inputs: Int, var monochrome: Boolean) {
             1 -> OpColorFill()
             2 -> OpHGrad()
             3 -> OpVGrad()
+            5 -> OpBlur()
             6 -> OpClamp()
             7 -> OpCombine()
             8 -> OpCurve()

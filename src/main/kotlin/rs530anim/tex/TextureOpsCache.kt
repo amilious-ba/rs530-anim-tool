@@ -3,6 +3,48 @@ package rs530anim.tex
 import rs530anim.model.Rs2Buffer
 import java.util.Random
 
+class OpBlur : TextureOp(1, false) {
+    private var rx = 1
+    private var ry = 1
+    override fun decode(code: Int, b: Rs2Buffer) {
+        when (code) {
+            0 -> rx = b.g1().coerceAtLeast(0)
+            1 -> ry = b.g1().coerceAtLeast(0)
+            2 -> monochrome = b.g1() == 1
+        }
+    }
+    override fun monoOut(y: Int): IntArray {
+        val (row, miss) = mono!!.row(y)
+        if (miss) {
+            val w = TextureContext.width
+            val hmask = TextureContext.heightMask
+            val wmask = TextureContext.widthMask
+            val ky = ry + ry + 1
+            val kx = rx + rx + 1
+            val sy = 65536 / ky
+            val sx = 65536 / kx.coerceAtLeast(1)
+            val tmp = Array(ky) { IntArray(w) }
+            for (yy in (y - ry)..(y + ry)) {
+                val src = childMono(0, yy and hmask)
+                var acc = 0
+                for (xx in -rx..rx) acc += src[xx and wmask]
+                val dest = tmp[yy - y + ry]
+                for (x in 0 until w) {
+                    dest[x] = acc * sx shr 16
+                    acc -= src[(x - rx) and wmask]
+                    acc += src[(x + 1 + rx) and wmask]
+                }
+            }
+            for (x in 0 until w) {
+                var acc = 0
+                for (i in 0 until ky) acc += tmp[i][x]
+                row[x] = acc * sy shr 16
+            }
+        }
+        return row
+    }
+}
+
 class OpBrick : TextureOp(0, true) {
     private var nx = 1
     private var ny = 1
