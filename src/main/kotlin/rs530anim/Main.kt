@@ -16,7 +16,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 fun main(args: Array<String>) {
-    val argv = if (args.isEmpty()) arrayOf("view", "1456") else args
+    val argv = if (args.isEmpty()) arrayOf("view", "npc", "132") else args
     val parsed = parseArgs(argv)
     when (parsed.command) {
         "selftest" -> runFrameSelfTest()
@@ -31,9 +31,32 @@ fun main(args: Array<String>) {
         "seq" -> dumpSeq(parsed)
         "apply" -> applySeq(parsed)
         "skins" -> MonkeySkins.print()
+        "npcs", "npc" -> NpcCatalog.printNpcs(parsed.rest.joinToString(" "))
+        "anims", "anim", "seqs" -> NpcCatalog.printAnims(parsed.rest.joinToString(" "))
         "view" -> {
-            val ids = if (parsed.rest.isEmpty()) listOf("1456") else parsed.rest
-            rs530anim.view.ModelViewer.open(ids)
+            val rest = parsed.rest
+            when {
+                rest.isEmpty() -> rs530anim.view.ModelViewer.open(listOf("132"))
+                rest[0].equals("npc", ignoreCase = true) && rest.size >= 2 -> {
+                    val nid = rest[1].toIntOrNull()
+                    if (nid == null) {
+                        System.err.println("Usage: view npc <id>")
+                        kotlin.system.exitProcess(1)
+                    }
+                    val row = NpcCatalog.get(nid)
+                    val models = NpcCatalog.modelsFor(nid)
+                    println(
+                        "npc $nid ${row?.name ?: "?"}  models=${models.joinToString("+")}  " +
+                            "atk=${row?.attack ?: 0} blk=${row?.block ?: 0} death=${row?.death ?: 0} range=${row?.range ?: 0}",
+                    )
+                    if (row != null && models == listOf(nid) && nid != 132) {
+                        println("note: no client modelIndices yet; trying model id == npc id (often wrong)")
+                    }
+                    val extra = rest.drop(2)
+                    rs530anim.view.ModelViewer.open(listOf(models.joinToString("+")) + extra)
+                }
+                else -> rs530anim.view.ModelViewer.open(rest)
+            }
         }
         else -> loadAndDumpModel(parsed.copy(command = "model", rest = listOf(args[0]) + parsed.rest))
     }

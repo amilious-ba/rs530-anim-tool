@@ -34,6 +34,6 @@ application {
 tasks.named<JavaExec>("run") {
     standardInput = System.`in`
     if (project.findProperty("runArgs") == null) {
-        args = listOf("view", "1456")
+        args = listOf("view", "npc", "132")
     }
 }
