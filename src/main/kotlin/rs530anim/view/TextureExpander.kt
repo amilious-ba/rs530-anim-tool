@@ -1,5 +1,6 @@
 package rs530anim.view
 
+import javafx.scene.image.Image
 import javafx.scene.image.PixelWriter
 import javafx.scene.image.WritableImage
 import javafx.scene.paint.Color
@@ -14,7 +15,10 @@ import kotlin.math.floor
 object TextureExpander {
     const val SIZE = 128
 
-    fun image(textureId: Int, baseHsl: Int): WritableImage {
+    fun image(textureId: Int, baseHsl: Int): Image {
+        TextureExpander::class.java.getResourceAsStream("/rs530anim/teximg/$textureId.png")?.use {
+            return Image(it)
+        }
         val img = WritableImage(SIZE, SIZE)
         val pw = img.pixelWriter
         val base = Hsl.toFx(baseHsl)
@@ -29,7 +33,7 @@ object TextureExpander {
         for (y in 0 until SIZE) {
             for (x in 0 until SIZE) {
                 val n = fbm(x / SIZE.toDouble(), y / SIZE.toDouble())
-                val s = 0.55 + n * 0.55
+                val s = 0.92 + n * 0.10
                 pw.setColor(
                     x,
                     y,
