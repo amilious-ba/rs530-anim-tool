@@ -79,6 +79,14 @@ class TimelineBar(
         children.addAll(firstBtn, prevBtn, playBtn, nextBtn, lastBtn)
         style = "-fx-background-color: #16161a;"
     }
+    private val tools = HBox(6.0).apply { alignment = Pos.CENTER_LEFT }
+    init {
+        transport.children += tools
+    }
+
+    fun setTools(vararg nodes: javafx.scene.Node) {
+        tools.children.setAll(*nodes)
+    }
 
     private val sheet = GridPane().apply {
         add(StackPane(headerCell("group", NAME_W, header = true)).apply {

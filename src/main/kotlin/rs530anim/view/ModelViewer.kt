@@ -17,10 +17,12 @@ import javafx.application.Platform
 import javafx.scene.control.Alert
 import javafx.scene.control.Button
 import javafx.scene.control.ButtonType
+import javafx.scene.control.CheckMenuItem
 import javafx.scene.control.Label
 import javafx.scene.control.Menu
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
+import javafx.scene.Node
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.SeparatorMenuItem
 import javafx.scene.control.Slider
@@ -184,8 +186,13 @@ class ModelViewer : Application() {
             }
         }
 
+        var showTextures = true
+        var showWire = false
+        var showVerts = false
         fun rebuild() {
-            meshGroup.children.setAll(buildMeshes(model, materials))
+            val nodes = buildMeshes(model, materials, showTextures, showWire).toMutableList<Node>()
+            if (showVerts) nodes += vertexDots(model)
+            meshGroup.children.setAll(nodes)
             showLabel(selectedLabel())
         }
 
@@ -516,8 +523,42 @@ class ModelViewer : Application() {
                 showAndWait()
             }
         }
+        val texToggle = ToggleButton("textures").apply { isSelected = true }
+        val wireToggle = ToggleButton("wire")
+        val vertToggle = ToggleButton("verts")
+        fun applyView() {
+            showTextures = texToggle.isSelected
+            showWire = wireToggle.isSelected
+            showVerts = vertToggle.isSelected
+            rebuild()
+        }
+
+        val texItem = CheckMenuItem("Textures").apply { isSelected = true }
+        val wireItem = CheckMenuItem("Triangle outline")
+        val vertItem = CheckMenuItem("Vertices")
+        fun syncView(fromMenu: Boolean) {
+            if (fromMenu) {
+                texToggle.isSelected = texItem.isSelected
+                wireToggle.isSelected = wireItem.isSelected
+                vertToggle.isSelected = vertItem.isSelected
+            } else {
+                texItem.isSelected = texToggle.isSelected
+                wireItem.isSelected = wireToggle.isSelected
+                vertItem.isSelected = vertToggle.isSelected
+            }
+            applyView()
+        }
+        texItem.setOnAction { syncView(true) }
+        wireItem.setOnAction { syncView(true) }
+        vertItem.setOnAction { syncView(true) }
+        texToggle.setOnAction { syncView(false) }
+        wireToggle.setOnAction { syncView(false) }
+        vertToggle.setOnAction { syncView(false) }
+        val viewMenu = Menu("View", null, texItem, wireItem, vertItem)
+
         val helpMenu = Menu("Help", null, aboutItem)
-        val menuBar = MenuBar(fileMenu, playMenu, helpMenu)
+        val menuBar = MenuBar(fileMenu, viewMenu, playMenu, helpMenu)
+        timeline.setTools(texToggle, wireToggle, vertToggle)
 
         val statusText = Label("ready").apply { textFill = Color.rgb(40, 40, 44) }
         windowStatus = { statusText.text = it }
@@ -578,7 +619,28 @@ private fun vskinOfFace(model: Rs2Model, face: Int): Int? {
     return labels.groupingBy { it }.eachCount().maxBy { it.value }.key
 }
 
-private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
+private fun vertexDots(model: Rs2Model): Group {
+    val g = Group()
+    val mat = PhongMaterial(Color.rgb(220, 220, 230))
+    for (i in 0 until model.vertexCount) {
+        val s = Sphere(1.2)
+        s.material = mat
+        s.translateX = model.verticesX[i].toDouble()
+        s.translateY = model.verticesY[i].toDouble()
+        s.translateZ = model.verticesZ[i].toDouble()
+        s.isMouseTransparent = true
+        g.children += s
+    }
+    g.isMouseTransparent = true
+    return g
+}
+
+private fun buildMeshes(
+    model: Rs2Model,
+    materials: TextureMaterials?,
+    textures: Boolean = true,
+    wire: Boolean = false,
+): List<Node> {
     data class Tri(val face: Int, val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
     val minX = (model.verticesX.minOrNull() ?: 0).toFloat()
     val maxX = (model.verticesX.maxOrNull() ?: 1).toFloat()
@@ -656,18 +718,25 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         view.material = PhongMaterial(Hsl.toFx(hsl)).apply {
             specularColor = Color.BLACK
             specularPower = 1.0
-            if (tex != 0xFFFF) {
+            if (textures && tex != 0xFFFF) {
                 val img = rs530anim.tex.TextureLibrary.image(tex)
                 if (img != null) {
                     diffuseMap = img
                     diffuseColor = Hsl.toFx(hsl)
-                } else {
-                    diffuseColor = Hsl.toFx(hsl)
                 }
             }
         }
-        view
-    }
+        val nodes = mutableListOf<Node>(view)
+        if (wire) {
+            val outline = MeshView(mesh)
+            outline.cullFace = CullFace.NONE
+            outline.drawMode = DrawMode.LINE
+            outline.material = PhongMaterial(Color.rgb(20, 20, 24))
+            outline.isMouseTransparent = true
+            nodes += outline
+        }
+        nodes
+    }.flatten()
 }
 
 /** Same sun as RawModel.createModel(..., -50, -10, -50) with ambient 64 / attenuation 768. */
