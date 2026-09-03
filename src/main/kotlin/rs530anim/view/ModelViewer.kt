@@ -13,13 +13,22 @@ import javafx.scene.PerspectiveCamera
 import javafx.scene.Scene
 import javafx.scene.SceneAntialiasing
 import javafx.scene.SubScene
+import javafx.application.Platform
+import javafx.scene.control.Alert
 import javafx.scene.control.Button
+import javafx.scene.control.ButtonType
 import javafx.scene.control.Label
+import javafx.scene.control.Menu
+import javafx.scene.control.MenuBar
+import javafx.scene.control.MenuItem
 import javafx.scene.control.ScrollPane
+import javafx.scene.control.SeparatorMenuItem
 import javafx.scene.control.Slider
 import javafx.scene.control.TextField
 import javafx.scene.control.ToggleButton
 import javafx.scene.control.ToggleGroup
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
 import rs530anim.anim.AnimFrame
 import rs530anim.anim.SeqType
 import rs530anim.anim.TransformType
@@ -185,6 +194,7 @@ class ModelViewer : Application() {
         var timelineStatus: (String) -> Unit = {}
         var timelinePlaying: (Boolean) -> Unit = {}
         var timelineEnabled: (Boolean) -> Unit = {}
+        var windowStatus: (String) -> Unit = {}
 
         fun loadSlidersFromFrame() {
             if (seqFrames.isEmpty()) return
@@ -241,6 +251,15 @@ class ModelViewer : Application() {
             }
             frameLabel.text = statusText
             timelineStatus(statusText)
+            val lab = selectedLabel()
+            val typeName = TransformType.nameOf(editType())
+            val baseId = seqFrames.firstOrNull()?.base?.id
+            windowStatus(
+                "model ${modelIds.joinToString("+")}   " +
+                    statusText +
+                    "   " + (lab?.let { "vskin $it $typeName" } ?: "no group") +
+                    (baseId?.let { "   base $it" } ?: ""),
+            )
             rebuild()
             refreshTimeline()
         }
@@ -450,20 +469,63 @@ class ModelViewer : Application() {
         timeline.root.minHeight = 200.0
         timeline.root.prefHeight = 220.0
         timeline.root.maxHeight = 260.0
+
+        val exportItem = MenuItem("Export extras…")
+        exportItem.setOnAction { exportBtn.fire() }
+        val importItem = MenuItem("Import extras…")
+        importItem.setOnAction { importBtn.fire() }
+        val exitItem = MenuItem("Exit")
+        exitItem.setOnAction { Platform.exit() }
+        val fileMenu = Menu("File", null, exportItem, importItem, SeparatorMenuItem(), exitItem)
+
+        val playItem = MenuItem("Play / Pause")
+        playItem.setOnAction { togglePlay() }
+        val firstItem = MenuItem("First frame")
+        firstItem.setOnAction { seekFrame(0) }
+        val prevItem = MenuItem("Previous frame")
+        prevItem.setOnAction { seekFrame(currentFrame - 1) }
+        val nextItem = MenuItem("Next frame")
+        nextItem.setOnAction { seekFrame(currentFrame + 1) }
+        val lastItem = MenuItem("Last frame")
+        lastItem.setOnAction { seekFrame(seqFrames.lastIndex) }
+        val playMenu = Menu("Playback", null, playItem, SeparatorMenuItem(), firstItem, prevItem, nextItem, lastItem)
+
+        val aboutItem = MenuItem("About")
+        aboutItem.setOnAction {
+            Alert(Alert.AlertType.INFORMATION, "530 / 2009scape label animation editor.\nNot a cache packer. Reuses the model's existing AnimBase.", ButtonType.OK).apply {
+                title = "rs530-anim-tool"
+                headerText = "rs530-anim-tool"
+                showAndWait()
+            }
+        }
+        val helpMenu = Menu("Help", null, aboutItem)
+        val menuBar = MenuBar(fileMenu, playMenu, helpMenu)
+
+        val statusText = Label("ready").apply { textFill = Color.rgb(40, 40, 44) }
+        windowStatus = { statusText.text = it }
+        val statusBar = HBox(statusText).apply {
+            padding = Insets(3.0, 8.0, 3.0, 8.0)
+            style = "-fx-background-color: #e8e8ea; -fx-border-color: #c8c8cc; -fx-border-width: 1 0 0 0;"
+        }
+        HBox.setHgrow(statusText, Priority.ALWAYS)
+
+        val work = BorderPane()
+        work.center = stack
+        work.left = sideScroll
+        work.bottom = timeline.root
         val pane = BorderPane()
-        pane.center = stack
-        pane.left = sideScroll
-        pane.bottom = timeline.root
-        sub.widthProperty().bind(pane.widthProperty().subtract(sideScroll.widthProperty()))
-        sub.heightProperty().bind(pane.heightProperty().subtract(220))
+        pane.top = menuBar
+        pane.center = work
+        pane.bottom = statusBar
+        sub.widthProperty().bind(work.widthProperty().subtract(sideScroll.widthProperty()))
+        sub.heightProperty().bind(work.heightProperty().subtract(220))
 
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
-            if (seqId != null) append("  seq $seqId frame $frameNo")
-            append("  click a label")
+            if (seqId != null) append("  seq $seqId")
         }
         stage.title = title
-        stage.scene = Scene(pane, 1180.0, 720.0)
+        stage.scene = Scene(pane, 1180.0, 760.0)
         if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
         applyPose()
         stage.show()
