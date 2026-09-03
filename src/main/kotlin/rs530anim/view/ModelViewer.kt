@@ -420,11 +420,19 @@ class ModelViewer : Application() {
             frames = { seqFrames },
             delays = { seqDelays },
             current = { currentFrame },
+            labels = { labels },
             selectedLabel = { selectedLabel() },
+            selectedType = { editType() },
             onSeek = { i ->
                 if (seqFrames.isNotEmpty()) {
                     frameSlider.value = i.toDouble()
                 }
+            },
+            onPick = { i, lab, type ->
+                if (seqFrames.isNotEmpty()) frameSlider.value = i.toDouble()
+                val idx = labels.indexOf(lab)
+                if (idx >= 0) list.selectionModel.select(idx + 1)
+                if (type == TransformType.ROTATE) rotBtn.isSelected = true else moveBtn.isSelected = true
             },
         )
         refreshTimeline = { timeline.refresh() }
