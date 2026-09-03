@@ -415,17 +415,35 @@ class ModelViewer : Application() {
 
         var lastX = 0.0
         var lastY = 0.0
+        var dragDist = 0.0
         sub.setOnMousePressed { e ->
             lastX = e.sceneX
             lastY = e.sceneY
+            dragDist = 0.0
         }
         sub.setOnMouseDragged { e ->
             if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
-                yaw.angle += (e.sceneX - lastX) * 0.4
-                pitch.angle += (e.sceneY - lastY) * 0.4
+                val dx = e.sceneX - lastX
+                val dy = e.sceneY - lastY
+                dragDist += kotlin.math.abs(dx) + kotlin.math.abs(dy)
+                yaw.angle += dx * 0.4
+                pitch.angle += dy * 0.4
                 lastX = e.sceneX
                 lastY = e.sceneY
             }
+        }
+        sub.setOnMouseReleased { e ->
+            if (e.button != MouseButton.PRIMARY || dragDist > 5.0) return@setOnMouseReleased
+            val pick = e.pickResult ?: return@setOnMouseReleased
+            val node = pick.intersectedNode as? MeshView ?: return@setOnMouseReleased
+            val faceMap = node.userData as? IntArray ?: return@setOnMouseReleased
+            val local = pick.intersectedFace
+            if (local < 0 || local >= faceMap.size) return@setOnMouseReleased
+            val lab = vskinOfFace(model, faceMap[local]) ?: return@setOnMouseReleased
+            pickedLabel = lab
+            pickedLabelUi.text = "vskin $lab  (${model.vertexCountForLabel(lab)} verts)"
+            loadSlidersFromFrame()
+            applyPose()
         }
         sub.addEventHandler(ScrollEvent.SCROLL) { e ->
             distance = (distance - e.deltaY * 0.4).coerceIn(20.0, 8000.0)
@@ -548,6 +566,18 @@ private fun fitDistance(model: Rs2Model): Double {
     return max * 3.0 + 80.0
 }
 
+private fun vskinOfFace(model: Rs2Model, face: Int): Int? {
+    val bones = model.vertexBones ?: return null
+    if (face < 0 || face >= model.faceCount) return null
+    val labels = intArrayOf(
+        bones.getOrElse(model.faceA[face]) { -1 },
+        bones.getOrElse(model.faceB[face]) { -1 },
+        bones.getOrElse(model.faceC[face]) { -1 },
+    ).filter { it >= 0 }
+    if (labels.isEmpty()) return null
+    return labels.groupingBy { it }.eachCount().maxBy { it.value }.key
+}
+
 private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<MeshView> {
     data class Tri(val face: Int, val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
     val minX = (model.verticesX.minOrNull() ?: 0).toFloat()
@@ -619,6 +649,7 @@ private fun buildMeshes(model: Rs2Model, materials: TextureMaterials?): List<Mes
         mesh.faces.addAll(*faces)
         mesh.faceSmoothingGroups.addAll(*IntArray(group.size) { 1 })
         val view = MeshView(mesh)
+        view.userData = IntArray(group.size) { group[it].face }
         view.cullFace = CullFace.NONE
         view.drawMode = DrawMode.FILL
         val hsl = group.first().color
