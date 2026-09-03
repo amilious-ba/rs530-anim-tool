@@ -188,6 +188,9 @@ class ModelViewer : Application() {
 
         var syncingSliders = false
         var refreshTimeline: () -> Unit = {}
+        var timelineStatus: (String) -> Unit = {}
+        var timelinePlaying: (Boolean) -> Unit = {}
+        var timelineEnabled: (Boolean) -> Unit = {}
 
         fun loadSlidersFromFrame() {
             if (seqFrames.isEmpty()) return
@@ -236,12 +239,14 @@ class ModelViewer : Application() {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 animator.apply(seqFrames[currentFrame])
             }
-            frameLabel.text = if (seqFrames.isEmpty()) {
+            val statusText = if (seqFrames.isEmpty()) {
                 "no seq"
             } else {
                 val d = seqDelays.getOrElse(currentFrame) { 5 }
                 "seq $seqIdLoaded  frame $currentFrame / ${seqFrames.size}  ${d} ticks (${d * 20} ms)"
             }
+            frameLabel.text = statusText
+            timelineStatus(statusText)
             rebuild()
             refreshTimeline()
         }
@@ -280,8 +285,6 @@ class ModelViewer : Application() {
             applyPose()
         }
 
-        val playBtn = Button(if (seqFrames.isEmpty()) "play (no seq)" else "play")
-        playBtn.isDisable = seqFrames.isEmpty()
         val extrasIdField = TextField((seqIdLoaded ?: 9220).toString())
         extrasIdField.prefWidth = 80.0
         val exportBtn = Button("export extras")
@@ -326,7 +329,7 @@ class ModelViewer : Application() {
                 seqIdLoaded = def.id
                 frameSlider.max = (seqFrames.size - 1).coerceAtLeast(0).toDouble()
                 frameSlider.value = 0.0
-                playBtn.isDisable = seqFrames.isEmpty()
+                timelineEnabled(seqFrames.isNotEmpty())
                 exportBtn.isDisable = seqFrames.isEmpty()
                 extrasLabel.text = "loaded extras seq ${def.id}"
                 loadSlidersFromFrame()
@@ -346,7 +349,6 @@ class ModelViewer : Application() {
                     return
                 }
                 val delayTicks = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
-                // 530 client cycle is 20ms; frameDelay is in those cycles.
                 if (now - accNs >= delayTicks * 20_000_000L) {
                     accNs = now
                     val next = (currentFrame + 1) % seqFrames.size
@@ -354,11 +356,16 @@ class ModelViewer : Application() {
                 }
             }
         }
-        playBtn.setOnAction {
+        fun togglePlay() {
+            if (seqFrames.isEmpty()) return
             playing = !playing
-            playBtn.text = if (playing) "stop" else "play"
+            timelinePlaying(playing)
             accNs = 0L
             if (playing) timer.start() else timer.stop()
+        }
+        fun seekFrame(i: Int) {
+            if (seqFrames.isEmpty()) return
+            frameSlider.value = i.coerceIn(0, seqFrames.lastIndex).toDouble()
         }
 
         val side = VBox(
@@ -366,9 +373,6 @@ class ModelViewer : Application() {
             Label("vskin labels"),
             list,
             Label("${model.vertexCount} verts  ${model.faceCount} faces"),
-            frameLabel,
-            frameSlider,
-            playBtn,
             Label("extras seq id"),
             extrasIdField,
             exportBtn,
@@ -435,19 +439,25 @@ class ModelViewer : Application() {
             labels = { labels },
             selectedLabel = { selectedLabel() },
             selectedType = { editType() },
-            onSeek = { i ->
-                if (seqFrames.isNotEmpty()) {
-                    frameSlider.value = i.toDouble()
-                }
-            },
+            onSeek = { i -> seekFrame(i) },
             onPick = { i, lab, type ->
-                if (seqFrames.isNotEmpty()) frameSlider.value = i.toDouble()
+                seekFrame(i)
                 val idx = labels.indexOf(lab)
                 if (idx >= 0) list.selectionModel.select(idx + 1)
                 if (type == TransformType.ROTATE) rotBtn.isSelected = true else moveBtn.isSelected = true
             },
+            onPlayToggle = { togglePlay() },
+            onFirst = { seekFrame(0) },
+            onPrev = { seekFrame(currentFrame - 1) },
+            onNext = { seekFrame(currentFrame + 1) },
+            onLast = { seekFrame(seqFrames.lastIndex) },
         )
         refreshTimeline = { timeline.refresh() }
+        timelineStatus = { timeline.status.text = it }
+        timelinePlaying = { timeline.setPlaying(it) }
+        timelineEnabled = { timeline.setEnabled(it) }
+        timeline.setEnabled(seqFrames.isNotEmpty())
+        timeline.setPlaying(false)
 
         timeline.root.minHeight = 200.0
         timeline.root.prefHeight = 220.0

@@ -2,9 +2,12 @@ package rs530anim.view
 
 import javafx.geometry.Insets
 import javafx.geometry.Pos
+import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tooltip
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
 import javafx.scene.input.MouseEvent
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
@@ -29,6 +32,11 @@ class TimelineBar(
     private val selectedType: () -> Int,
     private val onSeek: (Int) -> Unit,
     private val onPick: (frame: Int, label: Int, type: Int) -> Unit,
+    private val onPlayToggle: () -> Unit,
+    private val onFirst: () -> Unit,
+    private val onPrev: () -> Unit,
+    private val onNext: () -> Unit,
+    private val onLast: () -> Unit,
 ) {
     private val grid = GridPane().apply {
         hgap = 0.0
@@ -41,18 +49,35 @@ class TimelineBar(
         isFitToHeight = false
         hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
         vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
-        prefHeight = 220.0
+        prefHeight = 176.0
         style = "-fx-background: #1e1e22; -fx-background-color: #1e1e22;"
     }
-    val root = VBox(
-        0.0,
-        Label("timeline  ·  rows = vskin groups  ·  diamond = keyed  ·  click cell to seek + select").apply {
-            padding = Insets(4.0, 8.0, 2.0, 8.0)
-            textFill = Color.rgb(180, 180, 186)
-        },
-        scroll,
-    ).apply {
+    private val firstBtn = Button("|<<").apply { setOnAction { onFirst() } }
+    private val prevBtn = Button("<").apply { setOnAction { onPrev() } }
+    val playBtn = Button("Play").apply { setOnAction { onPlayToggle() } }
+    private val nextBtn = Button(">").apply { setOnAction { onNext() } }
+    private val lastBtn = Button(">>|").apply { setOnAction { onLast() } }
+    val status = Label("no seq").apply { textFill = Color.rgb(200, 200, 206) }
+    private val transport = HBox(6.0).apply {
+        alignment = Pos.CENTER_LEFT
+        padding = Insets(4.0, 8.0, 4.0, 8.0)
+        children.addAll(firstBtn, prevBtn, playBtn, nextBtn, lastBtn, status)
+        style = "-fx-background-color: #16161a;"
+    }
+    val root = VBox(0.0, transport, scroll).apply {
         style = "-fx-background-color: #1e1e22;"
+    }
+
+    fun setPlaying(playing: Boolean) {
+        playBtn.text = if (playing) "Pause" else "Play"
+    }
+
+    fun setEnabled(on: Boolean) {
+        firstBtn.isDisable = !on
+        prevBtn.isDisable = !on
+        playBtn.isDisable = !on
+        nextBtn.isDisable = !on
+        lastBtn.isDisable = !on
     }
 
     fun refresh() {
