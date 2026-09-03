@@ -15,7 +15,6 @@ import javafx.scene.SceneAntialiasing
 import javafx.scene.SubScene
 import javafx.scene.control.Button
 import javafx.scene.control.Label
-import javafx.scene.control.ListView
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Slider
 import javafx.scene.control.TextField
@@ -139,16 +138,11 @@ class ModelViewer : Application() {
         world.children.add(0, meshGroup)
 
         val labels = model.uniqueVertexLabels()
-        val list = ListView<String>()
-        list.items.add("none")
-        for (lab in labels) {
-            list.items.add("vskin $lab  (${model.vertexCountForLabel(lab)} verts)")
-        }
-        list.selectionModel.select(0)
-        fun selectedLabel(): Int? {
-            val i = list.selectionModel.selectedIndex
-            return if (i <= 0) null else labels.getOrNull(i - 1)
-        }
+        var pickedLabel: Int? = labels.firstOrNull()
+        fun selectedLabel(): Int? = pickedLabel
+        val pickedLabelUi = Label(
+            pickedLabel?.let { "vskin $it  (${model.vertexCountForLabel(it)} verts)" } ?: "no vskin",
+        )
 
         val frameSlider = Slider(0.0, (seqFrames.size - 1).coerceAtLeast(0).toDouble(), currentFrame.toDouble())
         frameSlider.isSnapToTicks = true
@@ -251,10 +245,6 @@ class ModelViewer : Application() {
             refreshTimeline()
         }
 
-        list.selectionModel.selectedIndexProperty().addListener { _, _, _ ->
-            loadSlidersFromFrame()
-            applyPose()
-        }
         frameSlider.valueProperty().addListener { _, _, _ ->
             loadSlidersFromFrame()
             applyPose()
@@ -370,9 +360,8 @@ class ModelViewer : Application() {
 
         val side = VBox(
             6.0,
-            Label("vskin labels"),
-            list,
             Label("${model.vertexCount} verts  ${model.faceCount} faces"),
+            pickedLabelUi,
             Label("extras seq id"),
             extrasIdField,
             exportBtn,
@@ -392,9 +381,6 @@ class ModelViewer : Application() {
         side.padding = Insets(8.0)
         side.prefWidth = 236.0
         side.minWidth = 236.0
-        list.minHeight = 80.0
-        list.prefHeight = 120.0
-        list.maxHeight = 140.0
         val sideScroll = ScrollPane(side).apply {
             isFitToWidth = true
             hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
@@ -442,9 +428,11 @@ class ModelViewer : Application() {
             onSeek = { i -> seekFrame(i) },
             onPick = { i, lab, type ->
                 seekFrame(i)
-                val idx = labels.indexOf(lab)
-                if (idx >= 0) list.selectionModel.select(idx + 1)
+                pickedLabel = lab
+                pickedLabelUi.text = "vskin $lab  (${model.vertexCountForLabel(lab)} verts)"
                 if (type == TransformType.ROTATE) rotBtn.isSelected = true else moveBtn.isSelected = true
+                loadSlidersFromFrame()
+                applyPose()
             },
             onPlayToggle = { togglePlay() },
             onFirst = { seekFrame(0) },
