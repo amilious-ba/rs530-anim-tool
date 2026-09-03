@@ -14,7 +14,6 @@ import javafx.scene.layout.GridPane
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
-import javafx.scene.shape.Polygon
 import javafx.scene.shape.Rectangle
 import rs530anim.anim.AnimFrame
 import rs530anim.anim.TransformType
@@ -92,12 +91,15 @@ class TimelineBar(
         grid.rowConstraints.clear()
 
         grid.columnConstraints += ColumnConstraints(NAME_W)
-        repeat(list.size.coerceAtLeast(1)) {
-            grid.columnConstraints += ColumnConstraints(CELL_W)
+        val frameCount = list.size.coerceAtLeast(1)
+        repeat(frameCount * 3) {
+            grid.columnConstraints += ColumnConstraints(AXIS_W)
         }
 
         var row = 0
-        headerRow(list, d, cur, row)
+        headerFrames(list, d, cur, row)
+        row++
+        headerAxes(list, cur, row)
         row++
 
         if (list.isEmpty()) {
@@ -114,18 +116,28 @@ class TimelineBar(
         }
     }
 
-    private fun headerRow(list: List<AnimFrame>, delays: IntArray, cur: Int, row: Int) {
-        val name = headerCell("frame / ticks", NAME_W, header = true)
-        grid.add(name, 0, row)
-        if (list.isEmpty()) {
-            grid.add(headerCell("—", CELL_W, header = true), 1, row)
-            return
-        }
+    private fun colOf(frame: Int, axis: Int): Int = 1 + frame * 3 + axis
+
+    private fun headerFrames(list: List<AnimFrame>, delays: IntArray, cur: Int, row: Int) {
+        grid.add(headerCell("group", NAME_W, header = true), 0, row)
+        if (list.isEmpty()) return
         list.forEachIndexed { i, _ ->
             val ticks = delays.getOrElse(i) { 5 }
-            val cell = headerCell("$i\n${ticks}t", CELL_W, playhead = i == cur, header = true)
+            val cell = headerCell("f$i  ${ticks}t", AXIS_W * 3, playhead = i == cur, header = true)
             cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
-            grid.add(cell, i + 1, row)
+            grid.add(cell, colOf(i, 0), row, 3, 1)
+        }
+    }
+
+    private fun headerAxes(list: List<AnimFrame>, cur: Int, row: Int) {
+        grid.add(headerCell("", NAME_W, header = true), 0, row)
+        if (list.isEmpty()) return
+        list.forEachIndexed { i, _ ->
+            for ((axis, name) in listOf(0 to "x", 1 to "y", 2 to "z")) {
+                val cell = headerCell(name, AXIS_W, playhead = i == cur, header = true)
+                cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
+                grid.add(cell, colOf(i, axis), row)
+            }
         }
     }
 
@@ -145,19 +157,16 @@ class TimelineBar(
             if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, type)
         }
         grid.add(name, 0, row)
+        val def = if (type == TransformType.SCALE) 128 else 0
         list.forEachIndexed { i, frame ->
-            val values = frame.valuesForLabel(label, type)
-            val def = if (type == TransformType.SCALE) 128 else 0
-            val keyed = values != null && (values.first != def || values.second != def || values.third != def)
-            val cell = keyCell(keyed, i == cur, active)
-            if (values != null) {
-                Tooltip.install(
-                    cell,
-                    Tooltip("vskin $label ${TransformType.nameOf(type)}  f$i   ${values.first}, ${values.second}, ${values.third}"),
-                )
+            val values = frame.valuesForLabel(label, type) ?: Triple(def, def, def)
+            val parts = intArrayOf(values.first, values.second, values.third)
+            parts.forEachIndexed { axis, value ->
+                val cell = valueCell(value, def, i == cur, active)
+                Tooltip.install(cell, Tooltip("vskin $label ${TransformType.nameOf(type)}  f$i"))
+                cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onPick(i, label, type) }
+                grid.add(cell, colOf(i, axis), row)
             }
-            cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onPick(i, label, type) }
-            grid.add(cell, i + 1, row)
         }
     }
 
@@ -191,29 +200,36 @@ class TimelineBar(
         }
     }
 
-    private fun keyCell(keyed: Boolean, playhead: Boolean, selectedTrack: Boolean): StackPane {
+    private fun valueCell(value: Int, def: Int, playhead: Boolean, selectedTrack: Boolean): StackPane {
+        val nonzero = value != def
         val bg = when {
             playhead && selectedTrack -> Color.rgb(70, 88, 44)
             playhead -> Color.rgb(48, 56, 36)
             selectedTrack -> Color.rgb(42, 42, 22)
             else -> Color.rgb(24, 24, 28)
         }
-        val fill = Rectangle(CELL_W, ROW_H, bg)
+        val fill = Rectangle(AXIS_W, ROW_H, bg)
         fill.stroke = Color.rgb(40, 40, 46)
-        val pane = StackPane(fill)
-        if (keyed) {
-            val diamond = Polygon(0.0, 5.0, 5.0, 0.0, 10.0, 5.0, 5.0, 10.0)
-            diamond.fill = Color.GOLD
-            pane.children += diamond
+        val label = Label(value.toString()).apply {
+            textFill = when {
+                nonzero -> Color.rgb(236, 210, 96)
+                playhead -> Color.rgb(180, 190, 160)
+                else -> Color.rgb(120, 120, 126)
+            }
+            style = "-fx-font-size: 10px;"
+            alignment = Pos.CENTER
+            prefWidth = AXIS_W
         }
-        pane.prefWidth = CELL_W
-        pane.prefHeight = ROW_H
-        return pane
+        return StackPane(fill, label).apply {
+            alignment = Pos.CENTER
+            prefWidth = AXIS_W
+            prefHeight = ROW_H
+        }
     }
 
     companion object {
         private const val NAME_W = 110.0
-        private const val CELL_W = 36.0
+        private const val AXIS_W = 36.0
         private const val ROW_H = 22.0
     }
 }
