@@ -72,11 +72,11 @@ class TimelineBar(
     val playBtn = Button("Play").apply { setOnAction { onPlayToggle() } }
     private val nextBtn = Button(">").apply { setOnAction { onNext() } }
     private val lastBtn = Button(">>|").apply { setOnAction { onLast() } }
-    val status = Label("no seq").apply { textFill = Color.rgb(200, 200, 206) }
+    val status = Label()
     private val transport = HBox(6.0).apply {
         alignment = Pos.CENTER_LEFT
         padding = Insets(4.0, 8.0, 4.0, 8.0)
-        children.addAll(firstBtn, prevBtn, playBtn, nextBtn, lastBtn, status)
+        children.addAll(firstBtn, prevBtn, playBtn, nextBtn, lastBtn)
         style = "-fx-background-color: #16161a;"
     }
 
