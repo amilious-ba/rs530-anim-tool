@@ -16,6 +16,7 @@ import javafx.scene.SubScene
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ListView
+import javafx.scene.control.ScrollPane
 import javafx.scene.control.Slider
 import javafx.scene.control.TextField
 import javafx.scene.control.ToggleButton
@@ -385,8 +386,19 @@ class ModelViewer : Application() {
             xyzLabel,
         )
         side.padding = Insets(8.0)
-        side.prefWidth = 220.0
-        list.prefHeight = 240.0
+        side.prefWidth = 236.0
+        side.minWidth = 236.0
+        list.minHeight = 80.0
+        list.prefHeight = 120.0
+        list.maxHeight = 140.0
+        val sideScroll = ScrollPane(side).apply {
+            isFitToWidth = true
+            hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+            vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
+            prefWidth = 248.0
+            minWidth = 248.0
+            style = "-fx-background-color: #f4f4f4;"
+        }
 
         val sub = SubScene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
         sub.fill = Color.rgb(32, 32, 36)
@@ -437,12 +449,15 @@ class ModelViewer : Application() {
         )
         refreshTimeline = { timeline.refresh() }
 
+        timeline.root.minHeight = 200.0
+        timeline.root.prefHeight = 220.0
+        timeline.root.maxHeight = 260.0
         val pane = BorderPane()
         pane.center = stack
-        pane.left = side
+        pane.left = sideScroll
         pane.bottom = timeline.root
-        sub.widthProperty().bind(pane.widthProperty().subtract(side.prefWidth))
-        sub.heightProperty().bind(pane.heightProperty().subtract(timeline.root.heightProperty()))
+        sub.widthProperty().bind(pane.widthProperty().subtract(sideScroll.widthProperty()))
+        sub.heightProperty().bind(pane.heightProperty().subtract(220))
 
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
