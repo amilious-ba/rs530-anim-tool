@@ -6,21 +6,21 @@ import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tooltip
-import javafx.scene.layout.HBox
-import javafx.scene.layout.Priority
-import javafx.scene.input.MouseEvent
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
+import javafx.scene.layout.RowConstraints
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
+import javafx.scene.input.MouseEvent
 import javafx.scene.paint.Color
 import javafx.scene.shape.Rectangle
 import rs530anim.anim.AnimFrame
 import rs530anim.anim.TransformType
 
 /**
- * Unity / Animate-style sheet: header = frames, rows = vskin × (rot|pos).
- * Client does not interpolate; each column is one AnimFrame.
+ * Frozen group column + frame header. Body scrolls; bars stay put.
  */
 class TimelineBar(
     private val frames: () -> List<AnimFrame>,
@@ -37,20 +37,36 @@ class TimelineBar(
     private val onNext: () -> Unit,
     private val onLast: () -> Unit,
 ) {
-    private val grid = GridPane().apply {
-        hgap = 0.0
-        vgap = 0.0
-        padding = Insets(0.0)
-        style = "-fx-background-color: #1e1e22;"
+    private val corner = GridPane()
+    private val head = GridPane()
+    private val names = GridPane()
+    private val body = GridPane()
+
+    private val headScroll = ScrollPane(head).apply {
+        hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+        vbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+        isFitToHeight = true
+        prefHeight = HEADER_H
+        minHeight = HEADER_H
+        maxHeight = HEADER_H
+        style = PANE
     }
-    private val scroll = ScrollPane(grid).apply {
-        isFitToWidth = false
-        isFitToHeight = false
+    private val nameScroll = ScrollPane(names).apply {
+        hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+        vbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+        isFitToWidth = true
+        prefWidth = NAME_W
+        minWidth = NAME_W
+        maxWidth = NAME_W
+        style = PANE
+    }
+    private val bodyScroll = ScrollPane(body).apply {
         hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
         vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
         prefHeight = 176.0
-        style = "-fx-background: #1e1e22; -fx-background-color: #1e1e22;"
+        style = PANE
     }
+
     private val firstBtn = Button("|<<").apply { setOnAction { onFirst() } }
     private val prevBtn = Button("<").apply { setOnAction { onPrev() } }
     val playBtn = Button("Play").apply { setOnAction { onPlayToggle() } }
@@ -63,8 +79,37 @@ class TimelineBar(
         children.addAll(firstBtn, prevBtn, playBtn, nextBtn, lastBtn, status)
         style = "-fx-background-color: #16161a;"
     }
-    val root = VBox(0.0, transport, scroll).apply {
+
+    private val sheet = GridPane().apply {
+        add(StackPane(headerCell("group", NAME_W, header = true)).apply {
+            prefWidth = NAME_W
+            prefHeight = HEADER_H
+            minHeight = HEADER_H
+            maxHeight = HEADER_H
+        }, 0, 0)
+        add(headScroll, 1, 0)
+        add(nameScroll, 0, 1)
+        add(bodyScroll, 1, 1)
+        ColumnConstraints(NAME_W).also { columnConstraints += it }
+        ColumnConstraints().also {
+            it.hgrow = Priority.ALWAYS
+            columnConstraints += it
+        }
+        RowConstraints(HEADER_H).also { rowConstraints += it }
+        RowConstraints().also {
+            it.vgrow = Priority.ALWAYS
+            rowConstraints += it
+        }
+    }
+
+    val root = VBox(0.0, transport, sheet).apply {
         style = "-fx-background-color: #1e1e22;"
+        VBox.setVgrow(sheet, Priority.ALWAYS)
+    }
+
+    init {
+        headScroll.hvalueProperty().bind(bodyScroll.hvalueProperty())
+        nameScroll.vvalueProperty().bind(bodyScroll.vvalueProperty())
     }
 
     fun setPlaying(playing: Boolean) {
@@ -86,57 +131,59 @@ class TimelineBar(
         val labs = labels()
         val selLab = selectedLabel()
         val selType = selectedType()
-        grid.children.clear()
-        grid.columnConstraints.clear()
-        grid.rowConstraints.clear()
-
-        grid.columnConstraints += ColumnConstraints(NAME_W)
-        val frameCount = list.size.coerceAtLeast(1)
-        repeat(frameCount * 3) {
-            grid.columnConstraints += ColumnConstraints(AXIS_W)
+        for (g in arrayOf(head, names, body)) {
+            g.children.clear()
+            g.columnConstraints.clear()
+            g.rowConstraints.clear()
         }
 
-        var row = 0
-        headerFrames(list, d, cur, row)
-        row++
-        headerAxes(list, cur, row)
-        row++
+        val frameCount = list.size.coerceAtLeast(1)
+        repeat(frameCount * 3) {
+            head.columnConstraints += ColumnConstraints(AXIS_W)
+            body.columnConstraints += ColumnConstraints(AXIS_W)
+        }
+        names.columnConstraints += ColumnConstraints(NAME_W)
+
+        headerFrames(list, d, cur)
+        headerAxes(list, cur)
 
         if (list.isEmpty()) {
-            val empty = Label("no sequence loaded").apply { textFill = Color.GRAY; padding = Insets(8.0) }
-            grid.add(empty, 0, row, 2, 1)
+            body.add(Label("no sequence loaded").apply { textFill = Color.GRAY; padding = Insets(8.0) }, 0, 0)
             return
         }
 
+        var row = 0
         for (lab in labs) {
+            names.rowConstraints += RowConstraints(ROW_H)
+            body.rowConstraints += RowConstraints(ROW_H)
             trackRow(lab, TransformType.ROTATE, "vskin $lab  rot", list, cur, selLab, selType, row)
             row++
+            names.rowConstraints += RowConstraints(ROW_H)
+            body.rowConstraints += RowConstraints(ROW_H)
             trackRow(lab, TransformType.TRANSLATE, "vskin $lab  pos", list, cur, selLab, selType, row)
             row++
         }
     }
 
-    private fun colOf(frame: Int, axis: Int): Int = 1 + frame * 3 + axis
+    private fun colOf(frame: Int, axis: Int): Int = frame * 3 + axis
 
-    private fun headerFrames(list: List<AnimFrame>, delays: IntArray, cur: Int, row: Int) {
-        grid.add(headerCell("group", NAME_W, header = true), 0, row)
+    private fun headerFrames(list: List<AnimFrame>, delays: IntArray, cur: Int) {
         if (list.isEmpty()) return
         list.forEachIndexed { i, _ ->
             val ticks = delays.getOrElse(i) { 5 }
             val cell = headerCell("f$i  ${ticks}t", AXIS_W * 3, playhead = i == cur, header = true)
             cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
-            grid.add(cell, colOf(i, 0), row, 3, 1)
+            head.add(cell, colOf(i, 0), 0, 3, 1)
         }
     }
 
-    private fun headerAxes(list: List<AnimFrame>, cur: Int, row: Int) {
-        grid.add(headerCell("", NAME_W, header = true), 0, row)
+    private fun headerAxes(list: List<AnimFrame>, cur: Int) {
         if (list.isEmpty()) return
         list.forEachIndexed { i, _ ->
             for ((axis, name) in listOf(0 to "x", 1 to "y", 2 to "z")) {
                 val cell = headerCell(name, AXIS_W, playhead = i == cur, header = true)
                 cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
-                grid.add(cell, colOf(i, axis), row)
+                head.add(cell, colOf(i, axis), 1)
             }
         }
     }
@@ -156,7 +203,7 @@ class TimelineBar(
         name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
             if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, type)
         }
-        grid.add(name, 0, row)
+        names.add(name, 0, row)
         val def = if (type == TransformType.SCALE) 128 else 0
         list.forEachIndexed { i, frame ->
             val values = frame.valuesForLabel(label, type) ?: Triple(def, def, def)
@@ -165,7 +212,7 @@ class TimelineBar(
                 val cell = valueCell(value, def, i == cur, active)
                 Tooltip.install(cell, Tooltip("vskin $label ${TransformType.nameOf(type)}  f$i"))
                 cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onPick(i, label, type) }
-                grid.add(cell, colOf(i, axis), row)
+                body.add(cell, colOf(i, axis), row)
             }
         }
     }
@@ -194,7 +241,7 @@ class TimelineBar(
             prefWidth = width
         }
         return StackPane(fill, label).apply {
-            alignment = if (header && text.contains('\n')) Pos.CENTER else Pos.CENTER_LEFT
+            alignment = Pos.CENTER_LEFT
             prefWidth = width
             prefHeight = ROW_H
         }
@@ -231,5 +278,7 @@ class TimelineBar(
         private const val NAME_W = 110.0
         private const val AXIS_W = 36.0
         private const val ROW_H = 22.0
+        private const val HEADER_H = 44.0
+        private const val PANE = "-fx-background: #1e1e22; -fx-background-color: #1e1e22;"
     }
 }
