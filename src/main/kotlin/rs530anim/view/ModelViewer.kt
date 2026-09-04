@@ -173,12 +173,28 @@ class ModelViewer : Application() {
         val sz = Slider(sliderMin(), sliderMax(), 0.0)
         val xyzLabel = Label("dx 0  dy 0  dz 0")
 
+        var highlightLabel: Int? = null
         fun showLabel(label: Int?) {
+            val ids = if (label == null || label < 0 || label >= model.boneVertices.size) {
+                IntArray(0)
+            } else {
+                model.boneVertices[label]
+            }
+            if (label == highlightLabel && highlight.children.size == ids.size) {
+                ids.forEachIndexed { i, vi ->
+                    val ball = highlight.children[i] as Sphere
+                    ball.translateX = model.verticesX[vi].toDouble()
+                    ball.translateY = model.verticesY[vi].toDouble()
+                    ball.translateZ = model.verticesZ[vi].toDouble()
+                }
+                return
+            }
+            highlightLabel = label
             highlight.children.clear()
-            if (label == null || label < 0 || label >= model.boneVertices.size) return
-            for (vi in model.boneVertices[label]) {
+            for (vi in ids) {
                 val ball = Sphere(2.4)
                 ball.material = markMat
+                ball.isMouseTransparent = true
                 ball.translateX = model.verticesX[vi].toDouble()
                 ball.translateY = model.verticesY[vi].toDouble()
                 ball.translateZ = model.verticesZ[vi].toDouble()
@@ -186,13 +202,46 @@ class ModelViewer : Application() {
             }
         }
 
+        val pointScratch = FloatArray(model.vertexCount * 3)
+        fun syncDeformedGeometry() {
+            var p = 0
+            for (i in 0 until model.vertexCount) {
+                pointScratch[p++] = model.verticesX[i].toFloat()
+                pointScratch[p++] = model.verticesY[i].toFloat()
+                pointScratch[p++] = model.verticesZ[i].toFloat()
+            }
+            for (n in meshGroup.children) {
+                when (n) {
+                    is MeshView -> {
+                        val mesh = n.mesh as? TriangleMesh ?: continue
+                        if (mesh.points.size() == pointScratch.size) {
+                            mesh.points.set(0, pointScratch, 0, pointScratch.size)
+                        }
+                    }
+                    is Group -> if (n.userData == "verts") {
+                        n.children.forEachIndexed { i, node ->
+                            val s = node as? Sphere ?: return@forEachIndexed
+                            if (i < model.vertexCount) {
+                                s.translateX = model.verticesX[i].toDouble()
+                                s.translateY = model.verticesY[i].toDouble()
+                                s.translateZ = model.verticesZ[i].toDouble()
+                            }
+                        }
+                    }
+                }
+            }
+            showLabel(selectedLabel())
+        }
+
         var showTextures = true
         var showWire = false
         var showVerts = false
+        var playing = false
         fun rebuild() {
             val nodes = buildMeshes(model, materials, showTextures, showWire).toMutableList<Node>()
             if (showVerts) nodes += vertexDots(model)
             meshGroup.children.setAll(nodes)
+            highlightLabel = null
             showLabel(selectedLabel())
         }
 
@@ -244,7 +293,7 @@ class ModelViewer : Application() {
             )
         }
 
-        fun applyPose() {
+        fun applyPose(fullUi: Boolean = true) {
             animator.restore(bind)
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
@@ -267,13 +316,13 @@ class ModelViewer : Application() {
                     "   " + (lab?.let { "vskin $it $typeName" } ?: "no group") +
                     (baseId?.let { "   base $it" } ?: ""),
             )
-            rebuild()
-            refreshTimeline()
+            syncDeformedGeometry()
+            if (fullUi) refreshTimeline()
         }
 
         frameSlider.valueProperty().addListener { _, _, _ ->
-            loadSlidersFromFrame()
-            applyPose()
+            if (!playing) loadSlidersFromFrame()
+            applyPose(fullUi = !playing)
         }
         sx.valueProperty().addListener { _, _, _ ->
             writeSlidersIntoFrame()
@@ -355,7 +404,6 @@ class ModelViewer : Application() {
                 System.err.println("import extras $inId: ${e.message}")
             }
         }
-        var playing = false
         var accNs = 0L
         val timer = object : AnimationTimer() {
             override fun handle(now: Long) {
@@ -364,12 +412,12 @@ class ModelViewer : Application() {
                     accNs = now
                     return
                 }
-                val delayTicks = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
-                if (now - accNs >= delayTicks * 20_000_000L) {
-                    accNs = now
-                    val next = (currentFrame + 1) % seqFrames.size
-                    frameSlider.value = next.toDouble()
-                }
+                val delayNs = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1) * 20_000_000L
+                if (now - accNs < delayNs) return
+                accNs += delayNs
+                if (now - accNs > delayNs * 4) accNs = now
+                val next = (currentFrame + 1) % seqFrames.size
+                frameSlider.value = next.toDouble()
             }
         }
         fun togglePlay() {
@@ -377,7 +425,13 @@ class ModelViewer : Application() {
             playing = !playing
             timelinePlaying(playing)
             accNs = 0L
-            if (playing) timer.start() else timer.stop()
+            if (playing) {
+                timer.start()
+            } else {
+                timer.stop()
+                loadSlidersFromFrame()
+                applyPose(fullUi = true)
+            }
         }
         fun seekFrame(i: Int) {
             if (seqFrames.isEmpty()) return
@@ -632,6 +686,7 @@ private fun vertexDots(model: Rs2Model): Group {
         g.children += s
     }
     g.isMouseTransparent = true
+    g.userData = "verts"
     return g
 }
 
