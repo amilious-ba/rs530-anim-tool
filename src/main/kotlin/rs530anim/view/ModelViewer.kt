@@ -447,15 +447,7 @@ class ModelViewer : Application() {
             exportBtn,
             importBtn,
             extrasLabel,
-            Label("edit selected label"),
-            rotBtn,
-            moveBtn,
-            Label("x"),
-            sx,
-            Label("y"),
-            sy,
-            Label("z"),
-            sz,
+            Label("double-click a timeline cell to edit x/y/z"),
             xyzLabel,
         )
         side.padding = Insets(8.0)
@@ -537,6 +529,23 @@ class ModelViewer : Application() {
             onPrev = { seekFrame(currentFrame - 1) },
             onNext = { seekFrame(currentFrame + 1) },
             onLast = { seekFrame(seqFrames.lastIndex) },
+            onEdit = { frame, lab, type, axis, value ->
+                if (frame in seqFrames.indices) {
+                    val src = seqFrames[frame]
+                    val def = if (type == TransformType.SCALE) 128 else 0
+                    val cur = src.valuesForLabel(lab, type) ?: Triple(def, def, def)
+                    val nx = if (axis == 0) value else cur.first
+                    val ny = if (axis == 1) value else cur.second
+                    val nz = if (axis == 2) value else cur.third
+                    seqFrames[frame] = src.withLabelValues(lab, type, nx, ny, nz)
+                    pickedLabel = lab
+                    pickedLabelUi.text = "vskin $lab  (${model.vertexCountForLabel(lab)} verts)"
+                    if (type == TransformType.ROTATE) rotBtn.isSelected = true else moveBtn.isSelected = true
+                    seekFrame(frame)
+                    loadSlidersFromFrame()
+                    applyPose(fullUi = true)
+                }
+            },
         )
         refreshTimeline = { timeline.refresh() }
         timelineStatus = { timeline.status.text = it }

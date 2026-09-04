@@ -5,7 +5,9 @@ import javafx.geometry.Pos
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
+import javafx.scene.control.TextField
 import javafx.scene.control.Tooltip
+import javafx.scene.input.KeyCode
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
@@ -36,7 +38,9 @@ class TimelineBar(
     private val onPrev: () -> Unit,
     private val onNext: () -> Unit,
     private val onLast: () -> Unit,
+    private val onEdit: (frame: Int, label: Int, type: Int, axis: Int, value: Int) -> Unit,
 ) {
+    private var editor: TextField? = null
     private val corner = GridPane()
     private val head = GridPane()
     private val names = GridPane()
@@ -133,6 +137,7 @@ class TimelineBar(
     }
 
     fun refresh() {
+        if (editor != null) return
         val list = frames()
         val d = delays()
         val cur = current()
@@ -218,8 +223,14 @@ class TimelineBar(
             val parts = intArrayOf(values.first, values.second, values.third)
             parts.forEachIndexed { axis, value ->
                 val cell = valueCell(value, def, i == cur, active)
-                Tooltip.install(cell, Tooltip("vskin $label ${TransformType.nameOf(type)}  f$i"))
-                cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onPick(i, label, type) }
+                Tooltip.install(cell, Tooltip("double-click to edit  vskin $label ${TransformType.nameOf(type)}  f$i"))
+                cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { e ->
+                    if (e.clickCount >= 2) {
+                        beginEdit(cell, i, label, type, axis, value)
+                    } else {
+                        onPick(i, label, type)
+                    }
+                }
                 body.add(cell, colOf(i, axis), row)
             }
         }
@@ -280,6 +291,38 @@ class TimelineBar(
             prefWidth = AXIS_W
             prefHeight = ROW_H
         }
+    }
+
+    private fun beginEdit(cell: StackPane, frame: Int, label: Int, type: Int, axis: Int, value: Int) {
+        if (editor != null) return
+        val field = TextField(value.toString()).apply {
+            prefWidth = AXIS_W
+            prefHeight = ROW_H
+            style = "-fx-font-size: 10px; -fx-background-color: #111; -fx-text-fill: #ffe08a; -fx-padding: 0 2 0 2;"
+        }
+        editor = field
+        cell.children.add(field)
+        field.requestFocus()
+        field.selectAll()
+        fun commit() {
+            if (editor !== field) return
+            editor = null
+            val parsed = field.text.trim().toIntOrNull()
+            cell.children.remove(field)
+            if (parsed != null && parsed != value) {
+                val lo = if (type == TransformType.ROTATE) 0 else -2047
+                val hi = if (type == TransformType.ROTATE) 2047 else 2047
+                onEdit(frame, label, type, axis, parsed.coerceIn(lo, hi))
+            }
+        }
+        fun cancel() {
+            if (editor !== field) return
+            editor = null
+            cell.children.remove(field)
+        }
+        field.setOnAction { commit() }
+        field.focusedProperty().addListener { _, _, focus -> if (!focus) commit() }
+        field.setOnKeyPressed { e -> if (e.code == KeyCode.ESCAPE) cancel() }
     }
 
     companion object {
