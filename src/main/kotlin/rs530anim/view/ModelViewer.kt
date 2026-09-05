@@ -329,7 +329,12 @@ class ModelViewer : Application() {
             animator.restore(bind)
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
-                animator.apply(seqFrames[currentFrame])
+                try {
+                    animator.apply(seqFrames[currentFrame])
+                } catch (e: Exception) {
+                    System.err.println("apply frame $currentFrame: ${e.javaClass.simpleName}: ${e.message}")
+                    e.printStackTrace()
+                }
             }
             val statusText = if (seqFrames.isEmpty()) {
                 "no seq"
@@ -860,14 +865,14 @@ class ModelViewer : Application() {
         val work = BorderPane()
         work.center = stack
         work.left = sideScroll
-        val split = SplitPane(work, timeline.root)
-        split.orientation = javafx.geometry.Orientation.VERTICAL
-        split.setDividerPositions(0.70)
-        SplitPane.setResizableWithParent(timeline.root, true)
+        timeline.root.minHeight = 220.0
+        timeline.root.prefHeight = 260.0
+        timeline.root.maxHeight = 320.0
+        val south = VBox(timeline.root, statusBar)
         val pane = BorderPane()
         pane.top = menuBar
-        pane.center = split
-        pane.bottom = statusBar
+        pane.center = work
+        pane.bottom = south
         fun fitSub() {
             val w = stack.width
             val h = stack.height
@@ -886,7 +891,9 @@ class ModelViewer : Application() {
             if (seqId != null) append("  seq $seqId")
         }
         stage.title = title
-        stage.scene = Scene(pane, 1180.0, 760.0).also { sc ->
+        stage.minWidth = 900.0
+        stage.minHeight = 700.0
+        stage.scene = Scene(pane, 1180.0, 820.0).also { sc ->
             val css = ModelViewer::class.java.getResource("/rs530anim/dark.css")
             if (css != null) sc.stylesheets += css.toExternalForm()
             sc.fill = Color.rgb(30, 30, 34)
