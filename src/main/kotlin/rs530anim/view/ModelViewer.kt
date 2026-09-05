@@ -41,6 +41,7 @@ import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
+import javafx.scene.image.WritableImage
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
 import javafx.scene.shape.CullFace
@@ -162,8 +163,8 @@ class ModelViewer : Application() {
         camera.translateZ = -distance
 
         val highlight = Group()
+        highlight.isMouseTransparent = true
         world.children += highlight
-        val markMat = PhongMaterial(Color.YELLOW)
         val meshGroup = Group()
         meshGroup.children.addAll(buildMeshes(model, materials))
         world.children.add(0, meshGroup)
@@ -192,37 +193,23 @@ class ModelViewer : Application() {
         val sy = Slider(sliderMin(), sliderMax(), 0.0)
         val sz = Slider(sliderMin(), sliderMax(), 0.0)
         val xyzLabel = Label("dx 0  dy 0  dz 0")
+        val pointScratch = FloatArray(model.vertexCount * 3)
 
         var highlightLabel: Int? = null
         fun showLabel(label: Int?) {
-            val ids = if (label == null || label < 0 || label >= model.boneVertices.size) {
-                IntArray(0)
-            } else {
-                model.boneVertices[label]
-            }
-            if (label == highlightLabel && highlight.children.size == ids.size) {
-                ids.forEachIndexed { i, vi ->
-                    val ball = highlight.children[i] as Sphere
-                    ball.translateX = model.verticesX[vi].toDouble()
-                    ball.translateY = model.verticesY[vi].toDouble()
-                    ball.translateZ = model.verticesZ[vi].toDouble()
+            if (label == highlightLabel && highlight.children.isNotEmpty()) {
+                for (n in highlight.children) {
+                    val mesh = (n as? MeshView)?.mesh as? TriangleMesh ?: continue
+                    if (mesh.points.size() == pointScratch.size) {
+                        mesh.points.set(0, pointScratch, 0, pointScratch.size)
+                    }
                 }
                 return
             }
             highlightLabel = label
-            highlight.children.clear()
-            for (vi in ids) {
-                val ball = Sphere(2.4)
-                ball.material = markMat
-                ball.isMouseTransparent = true
-                ball.translateX = model.verticesX[vi].toDouble()
-                ball.translateY = model.verticesY[vi].toDouble()
-                ball.translateZ = model.verticesZ[vi].toDouble()
-                highlight.children += ball
-            }
+            highlight.children.setAll(vskinGlow(model, label))
         }
 
-        val pointScratch = FloatArray(model.vertexCount * 3)
         fun syncDeformedGeometry() {
             var p = 0
             for (i in 0 until model.vertexCount) {
@@ -230,27 +217,32 @@ class ModelViewer : Application() {
                 pointScratch[p++] = model.verticesY[i].toFloat()
                 pointScratch[p++] = model.verticesZ[i].toFloat()
             }
-            for (n in meshGroup.children) {
-                when (n) {
+            fun pushPoints(node: Node) {
+                when (node) {
                     is MeshView -> {
-                        val mesh = n.mesh as? TriangleMesh ?: continue
+                        val mesh = node.mesh as? TriangleMesh ?: return
                         if (mesh.points.size() == pointScratch.size) {
                             mesh.points.set(0, pointScratch, 0, pointScratch.size)
                         }
                     }
-                    is Group -> if (n.userData == "verts") {
-                        n.children.forEachIndexed { i, node ->
-                            val s = node as? Sphere ?: return@forEachIndexed
-                            if (i < model.vertexCount) {
-                                s.translateX = model.verticesX[i].toDouble()
-                                s.translateY = model.verticesY[i].toDouble()
-                                s.translateZ = model.verticesZ[i].toDouble()
+                    is Group -> {
+                        if (node.userData == "verts") {
+                            node.children.forEachIndexed { i, child ->
+                                val s = child as? Sphere ?: return@forEachIndexed
+                                if (i < model.vertexCount) {
+                                    s.translateX = model.verticesX[i].toDouble()
+                                    s.translateY = model.verticesY[i].toDouble()
+                                    s.translateZ = model.verticesZ[i].toDouble()
+                                }
                             }
+                        } else {
+                            node.children.forEach { pushPoints(it) }
                         }
                     }
                 }
             }
-            showLabel(selectedLabel())
+            meshGroup.children.forEach { pushPoints(it) }
+            highlight.children.forEach { pushPoints(it) }
         }
 
         var showTextures = true
@@ -826,6 +818,62 @@ private fun vskinOfFace(model: Rs2Model, face: Int): Int? {
     ).filter { it >= 0 }
     if (labels.isEmpty()) return null
     return labels.groupingBy { it }.eachCount().maxBy { it.value }.key
+}
+
+private fun vskinGlow(model: Rs2Model, label: Int?): List<Node> {
+    if (label == null) return emptyList()
+    val bones = model.vertexBones ?: return emptyList()
+    val faces = ArrayList<Int>()
+    for (i in 0 until model.faceCount) {
+        val a = model.faceA[i]
+        val b = model.faceB[i]
+        val c = model.faceC[i]
+        if (bones.getOrElse(a) { -1 } == label || bones.getOrElse(b) { -1 } == label || bones.getOrElse(c) { -1 } == label) {
+            faces += i
+        }
+    }
+    if (faces.isEmpty()) return emptyList()
+    val mesh = TriangleMesh()
+    val points = FloatArray(model.vertexCount * 3)
+    var p = 0
+    for (i in 0 until model.vertexCount) {
+        points[p++] = model.verticesX[i].toFloat()
+        points[p++] = model.verticesY[i].toFloat()
+        points[p++] = model.verticesZ[i].toFloat()
+    }
+    val uvs = floatArrayOf(0f, 0f)
+    val idx = IntArray(faces.size * 6)
+    var f = 0
+    for (face in faces) {
+        idx[f++] = model.faceA[face]; idx[f++] = 0
+        idx[f++] = model.faceB[face]; idx[f++] = 0
+        idx[f++] = model.faceC[face]; idx[f++] = 0
+    }
+    mesh.points.addAll(*points)
+    mesh.texCoords.addAll(*uvs)
+    mesh.faces.addAll(*idx)
+    val glowTex = WritableImage(1, 1)
+    glowTex.pixelWriter.setColor(0, 0, Color.color(1.0, 0.82, 0.25))
+    val fill = MeshView(mesh).apply {
+        cullFace = CullFace.NONE
+        drawMode = DrawMode.FILL
+        isMouseTransparent = true
+        material = PhongMaterial(Color.color(1.0, 0.85, 0.3, 0.45)).apply {
+            specularColor = Color.color(1.0, 0.95, 0.6)
+            specularPower = 6.0
+            selfIlluminationMap = glowTex
+        }
+    }
+    val line = MeshView(mesh).apply {
+        cullFace = CullFace.NONE
+        drawMode = DrawMode.LINE
+        isMouseTransparent = true
+        material = PhongMaterial(Color.color(1.0, 0.92, 0.45)).apply {
+            selfIlluminationMap = glowTex
+            specularColor = Color.BLACK
+        }
+    }
+    return listOf(fill, line)
 }
 
 private fun vertexDots(model: Rs2Model): Group {
