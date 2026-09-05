@@ -18,6 +18,7 @@ import javafx.scene.control.Alert
 import javafx.scene.control.Button
 import javafx.scene.control.ButtonType
 import javafx.scene.control.CheckMenuItem
+import javafx.scene.control.ComboBox
 import javafx.scene.control.Label
 import javafx.scene.control.Menu
 import javafx.scene.control.MenuBar
@@ -50,6 +51,7 @@ import javafx.scene.shape.TriangleMesh
 import javafx.scene.transform.Rotate
 import javafx.stage.Stage
 import rs530anim.MonkeySkins
+import rs530anim.NpcCatalog
 import rs530anim.anim.AnimLibrary
 import rs530anim.anim.ModelAnimator
 import rs530anim.cache.CacheSettings
@@ -113,6 +115,23 @@ class ModelViewer : Application() {
                 }
             } catch (e: Exception) {
                 System.err.println("seq $seqId not loaded: ${e.message}")
+            }
+        }
+        fun loadSequence(id: Int): Boolean {
+            return try {
+                Js5Store(settings).use { store ->
+                    val seq = AnimLibrary.loadSeq(store, id)
+                    seqFrames = seq.frames.map { AnimLibrary.frameOf(store, it) }.toMutableList()
+                    seqDelays = seq.delays
+                    seqLoop = seq.looptype
+                    seqPriority = seq.priority
+                    seqIdLoaded = id
+                    println("seq $id frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id}")
+                }
+                true
+            } catch (e: Exception) {
+                System.err.println("seq $id not loaded: ${e.message}")
+                false
             }
         }
         centerModel(model)
@@ -438,10 +457,40 @@ class ModelViewer : Application() {
             frameSlider.value = i.coerceIn(0, seqFrames.lastIndex).toDouble()
         }
 
+        val seqBox = ComboBox<NpcCatalog.SeqRef>()
+        seqBox.prefWidth = 220.0
+        seqBox.items.addAll(NpcCatalog.sequencesForModels(modelIds))
+        val currentSeq = seqIdLoaded
+        if (currentSeq != null) {
+            val match = seqBox.items.firstOrNull { it.id == currentSeq }
+            if (match != null) {
+                seqBox.selectionModel.select(match)
+            } else {
+                val extra = NpcCatalog.SeqRef(currentSeq, "loaded")
+                seqBox.items.add(0, extra)
+                seqBox.selectionModel.select(extra)
+            }
+        }
+        seqBox.setOnAction {
+            val ref = seqBox.selectionModel.selectedItem ?: return@setOnAction
+            if (ref.id == seqIdLoaded) return@setOnAction
+            if (playing) togglePlay()
+            if (!loadSequence(ref.id)) return@setOnAction
+            extrasIdField.text = ref.id.toString()
+            frameSlider.max = (seqFrames.size - 1).coerceAtLeast(0).toDouble()
+            frameSlider.value = 0.0
+            timelineEnabled(seqFrames.isNotEmpty())
+            exportBtn.isDisable = seqFrames.isEmpty()
+            loadSlidersFromFrame()
+            applyPose(fullUi = true)
+        }
+
         val side = VBox(
             6.0,
             Label("${model.vertexCount} verts  ${model.faceCount} faces"),
             pickedLabelUi,
+            Label("animation"),
+            seqBox,
             Label("extras seq id"),
             extrasIdField,
             exportBtn,

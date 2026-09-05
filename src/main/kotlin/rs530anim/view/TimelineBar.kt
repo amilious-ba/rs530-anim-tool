@@ -178,7 +178,6 @@ class TimelineBar(
         }
 
         val base = list.first().base
-        if (selLab != null) expanded += selLab
 
         var row = 0
         for (lab in labs) {
@@ -226,13 +225,8 @@ class TimelineBar(
         val title = "$mark  vskin $label"
         val name = headerCell(title, NAME_W, selected = selLab == label)
         name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
-            if (open) {
-                expanded.remove(label)
-            } else {
-                expanded += label
-            }
-            if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, primary)
-            else refresh()
+            if (open) expanded.remove(label) else expanded += label
+            refresh()
         }
         Tooltip.install(name, Tooltip("vskin $label  $extra"))
         names.add(name, 0, row)

@@ -55,6 +55,39 @@ object NpcCatalog {
         println("${rows.size} npcs")
     }
 
+    data class SeqRef(val id: Int, val label: String) {
+        override fun toString(): String = if (label.isBlank()) id.toString() else "$id  $label"
+    }
+
+    fun sequencesForModels(modelIds: Collection<Int>): List<SeqRef> {
+        val ids = modelIds.toSet()
+        val names = linkedMapOf<Int, MutableList<String>>()
+        fun add(seq: Int?, role: String) {
+            if (seq == null || seq <= 0) return
+            names.getOrPut(seq) { mutableListOf() }.add(role)
+        }
+        for (s in MonkeySkins.all) {
+            val models = modelsFor(s.modelId).toSet() + s.modelId
+            if (models.none { it in ids }) continue
+            add(s.attack, "${s.name} attack")
+            add(s.block, "${s.name} block")
+            add(s.death, "${s.name} death")
+            add(s.sleep, "${s.name} sleep")
+            add(s.wake, "${s.name} wake")
+        }
+        for (r in all) {
+            val models = modelsFor(r.id).toSet() + r.id
+            if (models.none { it in ids }) continue
+            add(r.attack, "${r.name} attack")
+            add(r.block, "${r.name} block")
+            add(r.death, "${r.name} death")
+            add(r.range, "${r.name} range")
+        }
+        return names.entries
+            .sortedBy { it.key }
+            .map { (id, roles) -> SeqRef(id, roles.distinct().joinToString(" / ")) }
+    }
+
     fun printAnims(q: String) {
         val rows = if (q.isBlank()) all else search(q)
         val map = linkedMapOf<Int, MutableList<String>>()
