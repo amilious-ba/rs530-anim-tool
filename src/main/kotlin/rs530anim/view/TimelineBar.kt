@@ -11,6 +11,7 @@ import javafx.scene.input.KeyCode
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
+import javafx.scene.layout.Pane
 import javafx.scene.layout.Priority
 import javafx.scene.layout.RowConstraints
 import javafx.scene.layout.StackPane
@@ -42,27 +43,24 @@ class TimelineBar(
 ) {
     private var editor: TextField? = null
     private val expanded = mutableSetOf<Int>()
-    private val corner = GridPane()
     private val head = GridPane()
     private val names = GridPane()
     private val body = GridPane()
 
-    private val headScroll = ScrollPane(head).apply {
-        hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
-        vbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
-        isFitToHeight = true
+    private val headClip = Rectangle(0.0, 0.0, 0.0, HEADER_H)
+    private val nameClip = Rectangle(NAME_W, 0.0)
+    private val headPane = Pane(head).apply {
         prefHeight = HEADER_H
         minHeight = HEADER_H
         maxHeight = HEADER_H
+        clip = headClip
         style = PANE
     }
-    private val nameScroll = ScrollPane(names).apply {
-        hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
-        vbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
-        isFitToWidth = true
+    private val namePane = Pane(names).apply {
         prefWidth = NAME_W
         minWidth = NAME_W
         maxWidth = NAME_W
+        clip = nameClip
         style = PANE
     }
     private val bodyScroll = ScrollPane(body).apply {
@@ -100,8 +98,8 @@ class TimelineBar(
             minHeight = HEADER_H
             maxHeight = HEADER_H
         }, 0, 0)
-        add(headScroll, 1, 0)
-        add(nameScroll, 0, 1)
+        add(headPane, 1, 0)
+        add(namePane, 0, 1)
         add(bodyScroll, 1, 1)
         ColumnConstraints(NAME_W).also { columnConstraints += it }
         ColumnConstraints().also {
@@ -121,8 +119,21 @@ class TimelineBar(
     }
 
     init {
-        headScroll.hvalueProperty().bind(bodyScroll.hvalueProperty())
-        nameScroll.vvalueProperty().bind(bodyScroll.vvalueProperty())
+        fun syncFreeze() {
+            val view = bodyScroll.viewportBounds
+            headClip.width = view.width.coerceAtLeast(0.0)
+            headClip.height = HEADER_H
+            nameClip.width = NAME_W
+            nameClip.height = view.height.coerceAtLeast(0.0)
+            val yRange = (body.layoutBounds.height - view.height).coerceAtLeast(0.0)
+            val xRange = (body.layoutBounds.width - view.width).coerceAtLeast(0.0)
+            names.translateY = -bodyScroll.vvalue * yRange
+            head.translateX = -bodyScroll.hvalue * xRange
+        }
+        bodyScroll.vvalueProperty().addListener { _, _, _ -> syncFreeze() }
+        bodyScroll.hvalueProperty().addListener { _, _, _ -> syncFreeze() }
+        bodyScroll.viewportBoundsProperty().addListener { _, _, _ -> syncFreeze() }
+        body.layoutBoundsProperty().addListener { _, _, _ -> syncFreeze() }
     }
 
     fun setPlaying(playing: Boolean) {
@@ -225,7 +236,10 @@ class TimelineBar(
         }
         Tooltip.install(name, Tooltip("vskin $label  $extra"))
         names.add(name, 0, row)
-        fillValues(label, primary, list, cur, selLab == label, row)
+        val span = (list.size * 3).coerceAtLeast(1)
+        val spacer = Rectangle(AXIS_W * span, ROW_H, Color.rgb(24, 24, 28))
+        spacer.stroke = Color.rgb(40, 40, 46)
+        body.add(spacer, 0, row, span, 1)
     }
 
     private fun colOf(frame: Int, axis: Int): Int = frame * 3 + axis
