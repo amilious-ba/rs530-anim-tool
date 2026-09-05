@@ -915,7 +915,38 @@ class ModelViewer : Application() {
                 applyPose(fullUi = true)
             }
         }
-        val editMenu = Menu("Edit", null, undoItem, redoItem, SeparatorMenuItem(), resetItem, SeparatorMenuItem(), grokItem, grokKeyItem)
+        val grokNewItem = MenuItem("New animation with Grok…")
+        grokNewItem.setOnAction {
+            if (seqFrames.isEmpty()) return@setOnAction
+            val base = seqFrames.first().base
+            GrokDialog.promptAndCreateNew(
+                seqId = seqIdLoaded,
+                baseId = base.id,
+                labels = labels,
+                frames = seqFrames,
+                delays = seqDelays,
+            ) { patches, frameCount ->
+                pushHist()
+                val n = frameCount.coerceIn(4, 12)
+                val next = MutableList(n) { AnimFrame.fromEdits(base, emptyList()) }
+                val nextDelays = IntArray(n) { 5 }
+                for (p in patches) {
+                    if (p.frame !in next.indices) continue
+                    next[p.frame] = next[p.frame].withLabelValues(p.label, p.type, p.x, p.y, p.z)
+                    if (p.delay != null) nextDelays[p.frame] = p.delay.coerceIn(1, 255)
+                }
+                seqFrames = next
+                seqDelays = nextDelays
+                currentFrame = 0
+                frameSlider.max = (seqFrames.size - 1).toDouble()
+                frameSlider.value = 0.0
+                timelineEnabled(true)
+                exportBtn.isDisable = false
+                loadSlidersFromFrame()
+                applyPose(fullUi = true)
+            }
+        }
+        val editMenu = Menu("Edit", null, undoItem, redoItem, SeparatorMenuItem(), resetItem, SeparatorMenuItem(), grokItem, grokNewItem, grokKeyItem)
 
         val playItem = MenuItem("Play / Pause")
         playItem.setOnAction { togglePlay() }

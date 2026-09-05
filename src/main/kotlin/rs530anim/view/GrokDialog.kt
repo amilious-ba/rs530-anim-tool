@@ -89,4 +89,65 @@ object GrokDialog {
         }
         dlg.showAndWait()
     }
+
+    fun promptAndCreateNew(
+        seqId: Int?,
+        baseId: Int?,
+        labels: List<Int>,
+        frames: List<AnimFrame>,
+        delays: IntArray,
+        apply: (patches: List<TrackPatch>, frameCount: Int) -> Unit,
+    ) {
+        var key = GrokSettings.apiKey()
+        if (key.isNullOrBlank()) {
+            key = askKey()
+            if (key.isNullOrBlank()) return
+        }
+        val area = TextArea("Make a short new idle: slight body sway and head bob over 8 frames.")
+        area.prefRowCount = 6
+        area.isWrapText = true
+        val status = Label("New clip call · full vskin grid · ${GrokSettings.model()}")
+        val generate = Button("Create animation")
+        val box = VBox(8.0, Label("Describe the new animation"), area, generate, status)
+        box.padding = Insets(10.0)
+        VBox.setVgrow(area, Priority.ALWAYS)
+        val dlg = Dialog<ButtonType>()
+        dlg.title = "New animation with Grok"
+        dlg.dialogPane.content = box
+        dlg.dialogPane.buttonTypes.add(ButtonType.CLOSE)
+        dlg.dialogPane.prefWidth = 520.0
+        generate.setOnAction {
+            val prompt = area.text.trim()
+            if (prompt.isEmpty()) return@setOnAction
+            generate.isDisable = true
+            status.text = "calling Grok…"
+            val snapshot = GrokAnimClient.describeFullGrid(seqId, baseId, labels, frames, delays)
+            val user = "Full vskin table for this mesh and base:\n$snapshot\n\nCreate a NEW animation:\n$prompt"
+            Thread {
+                try {
+                    val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPromptNew, user)
+                    val count = GrokAnimClient.parseFrameCount(raw, frames.size)
+                    val patches = GrokAnimClient.parsePatches(raw, count)
+                    Platform.runLater {
+                        generate.isDisable = false
+                        if (patches.isEmpty()) {
+                            status.text = "Grok replied but no patches parsed. See console."
+                            println("Grok new raw:\n$raw")
+                        } else {
+                            status.text = "new clip: ${patches.size} patches, $count frames"
+                            apply(patches, count)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Platform.runLater {
+                        generate.isDisable = false
+                        status.text = e.message ?: e.javaClass.simpleName
+                        Alert(Alert.AlertType.ERROR, status.text, ButtonType.OK).showAndWait()
+                    }
+                    e.printStackTrace()
+                }
+            }.apply { name = "grok-new-anim"; isDaemon = true; start() }
+        }
+        dlg.showAndWait()
+    }
 }

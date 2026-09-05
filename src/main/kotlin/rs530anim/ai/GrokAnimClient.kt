@@ -56,6 +56,37 @@ object GrokAnimClient {
         return sb.toString()
     }
 
+    fun describeFullGrid(
+        seqId: Int?,
+        baseId: Int?,
+        labels: List<Int>,
+        frames: List<AnimFrame>,
+        delays: IntArray,
+    ): String {
+        val sb = StringBuilder()
+        sb.append("seq=").append(seqId ?: -1)
+        sb.append(" base=").append(baseId ?: -1)
+        sb.append(" labels=").append(labels.joinToString(","))
+        sb.append(" frameCount=").append(frames.size)
+        sb.append("\nY is down. Raise = negative translate y. Rotate 0..2047.\n")
+        sb.append("Full grid (every vskin that has a slot):\n")
+        frames.forEachIndexed { i, frame ->
+            sb.append("frame ").append(i).append(" delay=").append(delays.getOrElse(i) { 5 }).append('\n')
+            for (lab in labels) {
+                for (type in intArrayOf(TransformType.TRANSLATE, TransformType.ROTATE, TransformType.SCALE)) {
+                    val v = frame.valuesForLabel(lab, type) ?: continue
+                    sb.append("  vskin ").append(lab).append(' ')
+                        .append(TransformType.nameOf(type))
+                        .append(" x=").append(v.first)
+                        .append(" y=").append(v.second)
+                        .append(" z=").append(v.third)
+                        .append('\n')
+                }
+            }
+        }
+        return sb.toString()
+    }
+
     fun complete(apiKey: String, model: String, system: String, user: String): String {
         val body = StringBuilder()
         body.append('{')
@@ -164,4 +195,19 @@ object GrokAnimClient {
         {"patches":[{"frame":2,"label":1,"type":"translate","x":0,"y":-48,"z":0},{"frame":3,"label":1,"type":"translate","x":0,"y":-40,"z":0},{"frame":4,"label":1,"type":"translate","x":0,"y":0,"z":0}]}
         type must be translate, rotate, or scale.
     """.trimIndent()
+
+    val systemPromptNew: String = """
+        You author a NEW revision-530 label animation on the given AnimBase.
+        You receive every vskin translate/rotate/scale value for every frame.
+        Invent a complete clip. You may change frame count between 4 and 12.
+        Use only listed labels and types that already appear in the grid.
+        Rotate 0..2047. Translate signed. Scale default 128. Y is down (raise = negative y).
+        Reply JSON only, no markdown:
+        {"frameCount":6,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
+        Include every frame you want in the new clip. Never return an empty patches array.
+    """.trimIndent()
+
+    fun parseFrameCount(raw: String, fallback: Int): Int =
+        Regex("\"frameCount\"\\s*:\\s*(\\d+)").find(raw)?.groupValues?.get(1)?.toIntOrNull()
+            ?.coerceIn(4, 12) ?: fallback
 }
