@@ -38,6 +38,9 @@ import rs530anim.anim.SeqType
 import rs530anim.anim.TransformType
 import rs530anim.extras.ExtrasStore
 import rs530anim.extras.SeqExtras
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyCodeCombination
+import javafx.scene.input.KeyCombination
 import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
@@ -105,6 +108,11 @@ class ModelViewer : Application() {
         var seqLoop = 0
         var seqPriority = 5
         var seqDelays = IntArray(0)
+        var markBaseline: () -> Unit = {}
+        var pushHist: () -> Unit = {}
+        var undoEdit: () -> Unit = {}
+        var redoEdit: () -> Unit = {}
+        var resetEdits: () -> Unit = {}
         if (seqId != null) {
             try {
                 Js5Store(settings).use { store ->
@@ -130,6 +138,7 @@ class ModelViewer : Application() {
                     seqIdLoaded = id
                     println("seq $id frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id}")
                 }
+                markBaseline()
                 true
             } catch (e: Exception) {
                 System.err.println("seq $id not loaded: ${e.message}")
@@ -140,6 +149,56 @@ class ModelViewer : Application() {
         var animator = ModelAnimator(model)
         var bind = animator.copyBindPose()
         var currentFrame = frameNo.coerceIn(0, (seqFrames.size - 1).coerceAtLeast(0))
+        data class AnimSnap(val frames: List<AnimFrame>, val delays: IntArray, val frame: Int)
+        fun takeSnap() = AnimSnap(seqFrames.toList(), seqDelays.copyOf(), currentFrame)
+        var baseline: AnimSnap? = if (seqFrames.isNotEmpty()) takeSnap() else null
+        val undoStack = ArrayDeque<AnimSnap>()
+        val redoStack = ArrayDeque<AnimSnap>()
+        var histLock = false
+        fun applySnap(snap: AnimSnap) {
+            seqFrames = snap.frames.toMutableList()
+            seqDelays = snap.delays.copyOf()
+            if (seqFrames.isNotEmpty()) {
+                currentFrame = snap.frame.coerceIn(0, seqFrames.lastIndex)
+                frameSlider.value = currentFrame.toDouble()
+            }
+            loadSlidersFromFrame()
+            applyPose(fullUi = true)
+        }
+        markBaseline = {
+            baseline = takeSnap()
+            undoStack.clear()
+            redoStack.clear()
+        }
+        pushHist = {
+            if (!histLock && seqFrames.isNotEmpty()) {
+                undoStack.addLast(takeSnap())
+                while (undoStack.size > 64) undoStack.removeFirst()
+                redoStack.clear()
+            }
+        }
+        undoEdit = {
+            if (undoStack.isEmpty()) return@undoEdit
+            histLock = true
+            redoStack.addLast(takeSnap())
+            applySnap(undoStack.removeLast())
+            histLock = false
+        }
+        redoEdit = {
+            if (redoStack.isEmpty()) return@redoEdit
+            histLock = true
+            undoStack.addLast(takeSnap())
+            applySnap(redoStack.removeLast())
+            histLock = false
+        }
+        resetEdits = {
+            val snap = baseline ?: return@resetEdits
+            histLock = true
+            undoStack.clear()
+            redoStack.clear()
+            applySnap(snap)
+            histLock = false
+        }
 
         val world = Group()
         world.children += AmbientLight(Color.color(0.55, 0.55, 0.55))
@@ -396,6 +455,8 @@ class ModelViewer : Application() {
         extrasIdField.prefWidth = 80.0
         val exportBtn = Button("export extras")
         val importBtn = Button("import extras")
+        val resetBtn = Button("reset")
+        resetBtn.setOnAction { resetEdits() }
         val extrasLabel = Label(ExtrasStore.defaultRoot().toString())
         extrasLabel.isWrapText = true
         exportBtn.isDisable = seqFrames.isEmpty()
@@ -439,6 +500,7 @@ class ModelViewer : Application() {
                 timelineEnabled(seqFrames.isNotEmpty())
                 exportBtn.isDisable = seqFrames.isEmpty()
                 extrasLabel.text = "loaded extras seq ${def.id}"
+                markBaseline()
                 loadSlidersFromFrame()
                 applyPose()
             } catch (e: Exception) {
@@ -641,6 +703,7 @@ class ModelViewer : Application() {
             extrasIdField,
             exportBtn,
             importBtn,
+            resetBtn,
             extrasLabel,
             xyzLabel,
         )
@@ -674,6 +737,7 @@ class ModelViewer : Application() {
             gizmoAccum = 0.0
             gizmoDrag = e.button == MouseButton.PRIMARY && toolIsGizmo() &&
                 gizmo.begin(e.pickResult?.intersectedNode)
+            if (gizmoDrag) pushHist()
         }
         sub.setOnMouseDragged { e ->
             val dx = e.sceneX - lastX
@@ -700,6 +764,7 @@ class ModelViewer : Application() {
                         seqFrames[currentFrame] = frame.withLabelValues(lab, type, parts[0], parts[1], parts[2])
                         loadSlidersFromFrame()
                         applyPose(fullUi = false)
+                        refreshTimeline()
                     }
                 }
             } else if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
@@ -762,6 +827,7 @@ class ModelViewer : Application() {
             onLast = { seekFrame(seqFrames.lastIndex) },
             onDelay = { frame, ticks ->
                 if (frame in seqDelays.indices) {
+                    pushHist()
                     seqDelays[frame] = ticks
                     refreshTimeline()
                     applyPose(fullUi = true)
@@ -769,6 +835,7 @@ class ModelViewer : Application() {
             },
             onEdit = { frame, lab, type, axis, value ->
                 if (frame in seqFrames.indices) {
+                    pushHist()
                     val src = seqFrames[frame]
                     val def = if (type == TransformType.SCALE) 128 else 0
                     val cur = src.valuesForLabel(lab, type) ?: Triple(def, def, def)
@@ -810,6 +877,15 @@ class ModelViewer : Application() {
         val exitItem = MenuItem("Exit")
         exitItem.setOnAction { Platform.exit() }
         val fileMenu = Menu("File", null, openNpcItem, SeparatorMenuItem(), exportItem, importItem, SeparatorMenuItem(), exitItem)
+        val undoItem = MenuItem("Undo")
+        undoItem.accelerator = KeyCodeCombination(KeyCode.Z, KeyCombination.SHORTCUT_DOWN)
+        undoItem.setOnAction { undoEdit() }
+        val redoItem = MenuItem("Redo")
+        redoItem.accelerator = KeyCodeCombination(KeyCode.Y, KeyCombination.SHORTCUT_DOWN)
+        redoItem.setOnAction { redoEdit() }
+        val resetItem = MenuItem("Reset sequence")
+        resetItem.setOnAction { resetEdits() }
+        val editMenu = Menu("Edit", null, undoItem, redoItem, SeparatorMenuItem(), resetItem)
 
         val playItem = MenuItem("Play / Pause")
         playItem.setOnAction { togglePlay() }
@@ -865,7 +941,7 @@ class ModelViewer : Application() {
         val viewMenu = Menu("View", null, texItem, wireItem, vertItem)
 
         val helpMenu = Menu("Help", null, aboutItem)
-        val menuBar = MenuBar(fileMenu, viewMenu, playMenu, helpMenu)
+        val menuBar = MenuBar(fileMenu, editMenu, viewMenu, playMenu, helpMenu)
         timeline.setTools(selectBtn, moveBtn, rotBtn, texToggle, wireToggle, vertToggle)
 
         val statusText = Label("ready").apply { textFill = Color.rgb(200, 200, 206) }
