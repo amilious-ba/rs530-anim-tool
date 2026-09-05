@@ -3,8 +3,9 @@ package rs530anim.anim
 import rs530anim.model.Rs2Model
 
 /**
- * SoftwareModel.method4569 + Model.method4553 (no tween, parts == 65535).
- * Origin / translate / rotate / scale only. Alpha and colour skipped this slice.
+ * SoftwareModel.method4569 + Model.method4553 when parts == 65535 (no tween, no 4577 mask).
+ * Walk matches the client: optional origin reset, then type + bones[slot] + xyz.
+ * Pass isolateLabel only for editor picking — never for playback that should match the client.
  */
 class ModelAnimator(private val model: Rs2Model) {
     var originX = 0
