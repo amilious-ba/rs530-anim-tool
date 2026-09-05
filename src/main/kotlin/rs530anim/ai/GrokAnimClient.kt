@@ -35,7 +35,7 @@ object GrokAnimClient {
         sb.append(" labels=").append(labels.joinToString(","))
         sb.append(" selected=").append(selectedLabel ?: labels.firstOrNull() ?: 0)
         sb.append(" frameCount=").append(frames.size).append('\n')
-        sb.append("Y is down in this client. Raising a group means more negative translate y.\n")
+        sb.append(playbackNotes())
         frames.forEachIndexed { i, frame ->
             val ticks = delays.getOrElse(i) { 5 }
             sb.append("frame ").append(i).append(" delay=").append(ticks)
@@ -64,11 +64,20 @@ object GrokAnimClient {
         delays: IntArray,
     ): String {
         val sb = StringBuilder()
+        val base = frames.firstOrNull()?.base
         sb.append("seq=").append(seqId ?: -1)
         sb.append(" base=").append(baseId ?: -1)
         sb.append(" labels=").append(labels.joinToString(","))
-        sb.append(" frameCount=").append(frames.size)
-        sb.append("\nY is down. Raise = negative translate y. Rotate 0..2047.\n")
+        sb.append(" frameCount=").append(frames.size).append('\n')
+        sb.append(playbackNotes())
+        if (base != null) {
+            sb.append("AnimBase slots (one xyz hits every label in the slot):\n")
+            for (slot in base.types.indices) {
+                sb.append("  slot ").append(slot).append(' ')
+                    .append(TransformType.nameOf(base.types[slot]))
+                    .append(" labels=[").append(base.bones[slot].joinToString(",")).append("]\n")
+            }
+        }
         sb.append("Full grid (every vskin that has a slot):\n")
         frames.forEachIndexed { i, frame ->
             sb.append("frame ").append(i).append(" delay=").append(delays.getOrElse(i) { 5 }).append('\n')
@@ -184,28 +193,51 @@ object GrokAnimClient {
         }
     }
 
+    fun playbackNotes(): String = """
+        Timing: delay is in client ticks. 1 tick = 20 ms. delay 5 = 100 ms. Typical attack frames use 3-8 ticks.
+        Execution (SoftwareModel.method4569), every frame from bind pose:
+          type 0 origin: average the verts of those labels; that point is the pivot for later groups.
+          type 1 translate: add x/y/z to verts of those labels only.
+          type 2 rotate: rotate those labels around the current origin. Units 0..2047, 2048 = 360 deg.
+          type 3 scale: scale those labels around the origin; 128 = 1.0.
+        Y is down. Raising a limb is negative translate Y, not moving every label.
+        vskin 0 is usually the origin locator, not the floor and not the whole NPC.
+        Do NOT keyframe origin slots or translate vskin 0 unless the user asks to move the root.
+        Do NOT copy the same xyz onto every vskin. Animate limbs with rotate on their own slots.
+        Keep translate magnitudes small (tens, not thousands). Rotate deltas from rest about 40-240.
+    """.trimIndent() + "\n"
+
     val systemPrompt: String = """
         You edit RuneScape revision 530 vskin animation tracks.
-        Never return an empty patches array. Always output concrete numbers.
-        Use only labels listed in the clip. Keep the same frame count.
-        Rotate is 0..2047 (2048 = 360 degrees). Translate is signed. Scale default 128.
-        RS Y is down: raise = negative translate y (about -30 to -80).
-        If the user says "selected group", use the selected= label from the clip header.
-        JSON only, no markdown:
-        {"patches":[{"frame":2,"label":1,"type":"translate","x":0,"y":-48,"z":0},{"frame":3,"label":1,"type":"translate","x":0,"y":-40,"z":0},{"frame":4,"label":1,"type":"translate","x":0,"y":0,"z":0}]}
-        type must be translate, rotate, or scale.
+        Follow the playback notes in the user message.
+        Never return an empty patches array.
+        Prefer rotate on a single limb label. Do not translate vskin 0 or origin slots.
+        Do not write the same xyz on every label.
+        If the user says selected group, use selected=.
+        JSON only:
+        {"patches":[{"frame":2,"label":1,"type":"rotate","x":80,"y":0,"z":0,"delay":5}]}
     """.trimIndent()
 
     val systemPromptNew: String = """
         You author a NEW revision-530 label animation on the given AnimBase.
-        You receive every vskin translate/rotate/scale value for every frame.
-        Invent a complete clip. You may change frame count between 4 and 12.
-        Use only listed labels and types that already appear in the grid.
-        Rotate 0..2047. Translate signed. Scale default 128. Y is down (raise = negative y).
-        Reply JSON only, no markdown:
-        {"frameCount":6,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
-        Include every frame you want in the new clip. Never return an empty patches array.
+        Follow the playback notes and slot list in the user message.
+        Animate by rotating individual limb labels. Never slide the whole NPC.
+        Forbidden unless the user asks: origin keys, translate on vskin 0, same xyz on every vskin.
+        Frame count 4..12. Delays are ticks (20 ms each), use 4-8.
+        JSON only:
+        {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
+        Include several limb rotates across frames. Never return empty patches.
     """.trimIndent()
+
+    fun sanitizePatches(patches: List<TrackPatch>, allowRoot: Boolean = false): List<TrackPatch> {
+        return patches.filter { p ->
+            if (p.type == TransformType.ORIGIN) return@filter false
+            if (!allowRoot && p.label == 0 && p.type == TransformType.TRANSLATE) return@filter false
+            val mag = kotlin.math.abs(p.x) + kotlin.math.abs(p.y) + kotlin.math.abs(p.z)
+            if (p.type == TransformType.TRANSLATE && mag > 400) return@filter false
+            true
+        }
+    }
 
     fun parseFrameCount(raw: String, fallback: Int): Int =
         Regex("\"frameCount\"\\s*:\\s*(\\d+)").find(raw)?.groupValues?.get(1)?.toIntOrNull()

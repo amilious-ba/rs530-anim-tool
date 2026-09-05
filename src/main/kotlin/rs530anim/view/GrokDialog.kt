@@ -66,7 +66,7 @@ object GrokDialog {
             Thread {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPrompt, user)
-                    val patches = GrokAnimClient.parsePatches(raw, frames.size)
+                    val patches = GrokAnimClient.sanitizePatches(GrokAnimClient.parsePatches(raw, frames.size))
                     Platform.runLater {
                         generate.isDisable = false
                         if (patches.isEmpty()) {
@@ -127,7 +127,7 @@ object GrokDialog {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPromptNew, user)
                     val count = GrokAnimClient.parseFrameCount(raw, frames.size)
-                    val patches = GrokAnimClient.parsePatches(raw, count)
+                    val patches = GrokAnimClient.sanitizePatches(GrokAnimClient.parsePatches(raw, count))
                     Platform.runLater {
                         generate.isDisable = false
                         if (patches.isEmpty()) {
