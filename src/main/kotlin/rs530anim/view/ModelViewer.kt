@@ -386,7 +386,7 @@ class ModelViewer : Application() {
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 try {
-                    animator.apply(seqFrames[currentFrame])
+                    animator.apply(seqFrames[currentFrame], isolateLabel = selectedLabel())
                 } catch (e: Exception) {
                     System.err.println("apply frame $currentFrame: ${e.javaClass.simpleName}: ${e.message}")
                     e.printStackTrace()

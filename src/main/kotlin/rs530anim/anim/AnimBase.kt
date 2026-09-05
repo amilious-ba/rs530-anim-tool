@@ -15,8 +15,20 @@ class AnimBase(
 ) {
     val transforms: Int get() = types.size
 
-    fun slotFor(label: Int, type: Int): Int? =
-        types.indices.firstOrNull { types[it] == type && label in bones[it] }
+    fun slotFor(label: Int, type: Int): Int? {
+        var best: Int? = null
+        var bestSize = Int.MAX_VALUE
+        for (slot in types.indices) {
+            if (types[slot] != type) continue
+            if (label !in bones[slot]) continue
+            val size = bones[slot].size
+            if (size < bestSize) {
+                best = slot
+                bestSize = size
+            }
+        }
+        return best
+    }
 
     fun encode(): ByteArray {
         val labels = bones.sumOf { it.size }

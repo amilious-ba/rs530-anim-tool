@@ -26,11 +26,19 @@ class AnimFrame(
 
     /** First used group whose base slot includes this vskin and type. */
     fun indexForLabel(label: Int, type: Int): Int? {
+        var best: Int? = null
+        var bestSize = Int.MAX_VALUE
         for (i in indices.indices) {
             val slot = indices[i].toInt()
-            if (base.types[slot] == type && label in base.bones[slot]) return i
+            if (base.types.getOrNull(slot) != type) continue
+            if (label !in base.bones[slot]) continue
+            val size = base.bones[slot].size
+            if (size < bestSize) {
+                best = i
+                bestSize = size
+            }
         }
-        return null
+        return best
     }
 
     fun valuesForLabel(label: Int, type: Int): Triple<Int, Int, Int>? {
