@@ -132,7 +132,13 @@ object GrokDialog {
             status.text = "calling Grok…"
             val who = GrokAnimClient.characterContext(npcId, npcName, modelIds, labels, vertsOf)
             val snapshot = GrokAnimClient.describeFullGrid(seqId, baseId, labels, frames, delays)
-            val user = "$who\nFull vskin table:\n$snapshot\n\nCreate a NEW animation for this NPC:\n$prompt"
+            val user = buildString {
+                append(who)
+                append("\nREFERENCE animation (stock clip on this NPC — scale and labels to copy from, not to replay):\n")
+                append(snapshot)
+                append("\nCreate a NEW animation for this same NPC and base.\n")
+                append(prompt)
+            }
             Thread {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPromptNew, user)

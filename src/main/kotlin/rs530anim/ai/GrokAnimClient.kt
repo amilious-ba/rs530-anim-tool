@@ -79,6 +79,7 @@ object GrokAnimClient {
                     .append(" labels=[").append(base.bones[slot].joinToString(",")).append("]\n")
             }
         }
+        sb.append("REFERENCE stock clip — real 530 values for this NPC. Match this scale and which labels move.\n")
         sb.append("Full grid (every vskin that has a slot):\n")
         frames.forEachIndexed { i, frame ->
             sb.append("frame ").append(i).append(" delay=").append(delays.getOrElse(i) { 5 }).append('\n')
@@ -246,9 +247,10 @@ object GrokAnimClient {
         Use rotate on the body label to turn. Use small translates on body/hips/limbs for shakes.
         Forbidden: origin keys, the same xyz on every vskin, huge root translates.
         Frame count 4..12. Delays are ticks (20 ms each), use 4-8.
+        Treat the included grid as a reference performance, not something to copy frame-for-frame.
         JSON only:
-        {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
-        Include several limb rotates across frames. Never return empty patches.
+        {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":0,"y":0,"z":0,"delay":5},{"frame":3,"label":1,"type":"rotate","x":80,"y":1024,"z":0,"delay":5},{"frame":7,"label":1,"type":"rotate","x":0,"y":0,"z":0,"delay":5}]}
+        Example meaning: body rotate y 0 → 1024 (180 deg turn) → 0, with a small x wobble at the midpoint.
     """.trimIndent()
 
     fun bodyLabel(base: AnimBase, labels: List<Int>, vertsOf: (Int) -> Int): Int? {
