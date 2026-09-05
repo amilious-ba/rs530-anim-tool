@@ -260,7 +260,7 @@ class ModelViewer : Application() {
             }
             meshGroup.children.forEach { pushPoints(it) }
             showLabel(selectedLabel())
-            refreshGizmo()
+            if (gizmo.axis == null) refreshGizmo()
         }
 
         var showTextures = true
@@ -673,11 +673,10 @@ class ModelViewer : Application() {
                     val def = if (type == TransformType.SCALE) 128 else 0
                     val cur = frame.valuesForLabel(lab, type) ?: Triple(def, def, def)
                     val parts = intArrayOf(cur.first, cur.second, cur.third)
-                    val step = if (type == TransformType.ROTATE) 4 else 1
-                    val delta = ((dx - dy) * 0.35).toInt()
+                    val delta = ((dx - dy) * if (type == TransformType.ROTATE) 0.12 else 0.2).toInt()
                     val lo = if (type == TransformType.ROTATE) 0 else -2047
                     val hi = 2047
-                    parts[axis] = (parts[axis] + delta * step).coerceIn(lo, hi)
+                    parts[axis] = (parts[axis] + delta).coerceIn(lo, hi)
                     seqFrames[currentFrame] = frame.withLabelValues(lab, type, parts[0], parts[1], parts[2])
                     loadSlidersFromFrame()
                     applyPose(fullUi = false)

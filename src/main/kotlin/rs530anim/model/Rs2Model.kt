@@ -35,7 +35,7 @@ data class Rs2Model(
 
     fun uniqueVertexLabels(): List<Int> {
         if (vertexBones == null) return emptyList()
-        return vertexBones.toSet().sorted()
+        return vertexBones.filter { it >= 0 }.toSet().sorted()
     }
 
     fun uniqueFaceLabels(): List<Int> {
