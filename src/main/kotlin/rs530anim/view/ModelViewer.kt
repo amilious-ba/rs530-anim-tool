@@ -23,6 +23,7 @@ import javafx.scene.control.Label
 import javafx.scene.control.Menu
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
+import javafx.scene.DepthTest
 import javafx.scene.Node
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.SeparatorMenuItem
@@ -41,7 +42,6 @@ import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
-import javafx.scene.image.WritableImage
 import javafx.scene.paint.Color
 import javafx.scene.paint.PhongMaterial
 import javafx.scene.shape.CullFace
@@ -197,15 +197,6 @@ class ModelViewer : Application() {
 
         var highlightLabel: Int? = null
         fun showLabel(label: Int?) {
-            if (label == highlightLabel && highlight.children.isNotEmpty()) {
-                for (n in highlight.children) {
-                    val mesh = (n as? MeshView)?.mesh as? TriangleMesh ?: continue
-                    if (mesh.points.size() == pointScratch.size) {
-                        mesh.points.set(0, pointScratch, 0, pointScratch.size)
-                    }
-                }
-                return
-            }
             highlightLabel = label
             highlight.children.setAll(vskinGlow(model, label))
         }
@@ -242,7 +233,7 @@ class ModelViewer : Application() {
                 }
             }
             meshGroup.children.forEach { pushPoints(it) }
-            highlight.children.forEach { pushPoints(it) }
+            showLabel(selectedLabel())
         }
 
         var showTextures = true
@@ -833,14 +824,54 @@ private fun vskinGlow(model: Rs2Model, label: Int?): List<Node> {
         }
     }
     if (faces.isEmpty()) return emptyList()
-    val mesh = TriangleMesh()
+    val used = HashSet<Int>()
+    for (face in faces) {
+        used += model.faceA[face]
+        used += model.faceB[face]
+        used += model.faceC[face]
+    }
+    val nx = FloatArray(model.vertexCount)
+    val ny = FloatArray(model.vertexCount)
+    val nz = FloatArray(model.vertexCount)
+    for (face in faces) {
+        val a = model.faceA[face]
+        val b = model.faceB[face]
+        val c = model.faceC[face]
+        val ux = (model.verticesX[b] - model.verticesX[a]).toFloat()
+        val uy = (model.verticesY[b] - model.verticesY[a]).toFloat()
+        val uz = (model.verticesZ[b] - model.verticesZ[a]).toFloat()
+        val vx = (model.verticesX[c] - model.verticesX[a]).toFloat()
+        val vy = (model.verticesY[c] - model.verticesY[a]).toFloat()
+        val vz = (model.verticesZ[c] - model.verticesZ[a]).toFloat()
+        val fx = uy * vz - uz * vy
+        val fy = uz * vx - ux * vz
+        val fz = ux * vy - uy * vx
+        for (vi in intArrayOf(a, b, c)) {
+            nx[vi] += fx
+            ny[vi] += fy
+            nz[vi] += fz
+        }
+    }
     val points = FloatArray(model.vertexCount * 3)
     var p = 0
     for (i in 0 until model.vertexCount) {
-        points[p++] = model.verticesX[i].toFloat()
-        points[p++] = model.verticesY[i].toFloat()
-        points[p++] = model.verticesZ[i].toFloat()
+        var x = model.verticesX[i].toFloat()
+        var y = model.verticesY[i].toFloat()
+        var z = model.verticesZ[i].toFloat()
+        if (i in used) {
+            val len = kotlin.math.sqrt(nx[i] * nx[i] + ny[i] * ny[i] + nz[i] * nz[i])
+            if (len > 1e-4f) {
+                val s = 2.2f / len
+                x += nx[i] * s
+                y += ny[i] * s
+                z += nz[i] * s
+            }
+        }
+        points[p++] = x
+        points[p++] = y
+        points[p++] = z
     }
+    val mesh = TriangleMesh()
     val uvs = floatArrayOf(0f, 0f)
     val idx = IntArray(faces.size * 6)
     var f = 0
@@ -852,28 +883,14 @@ private fun vskinGlow(model: Rs2Model, label: Int?): List<Node> {
     mesh.points.addAll(*points)
     mesh.texCoords.addAll(*uvs)
     mesh.faces.addAll(*idx)
-    val glowTex = WritableImage(1, 1)
-    glowTex.pixelWriter.setColor(0, 0, Color.color(1.0, 0.82, 0.25))
-    val fill = MeshView(mesh).apply {
-        cullFace = CullFace.NONE
-        drawMode = DrawMode.FILL
-        isMouseTransparent = true
-        material = PhongMaterial(Color.color(1.0, 0.85, 0.3, 0.45)).apply {
-            specularColor = Color.color(1.0, 0.95, 0.6)
-            specularPower = 6.0
-            selfIlluminationMap = glowTex
-        }
-    }
     val line = MeshView(mesh).apply {
         cullFace = CullFace.NONE
         drawMode = DrawMode.LINE
+        depthTest = DepthTest.DISABLE
         isMouseTransparent = true
-        material = PhongMaterial(Color.color(1.0, 0.92, 0.45)).apply {
-            selfIlluminationMap = glowTex
-            specularColor = Color.BLACK
-        }
+        material = PhongMaterial(Color.web("#f4d35e"))
     }
-    return listOf(fill, line)
+    return listOf(line)
 }
 
 private fun vertexDots(model: Rs2Model): Group {
