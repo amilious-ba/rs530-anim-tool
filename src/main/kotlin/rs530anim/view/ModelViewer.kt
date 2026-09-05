@@ -229,14 +229,7 @@ class ModelViewer : Application() {
         var labels = model.uniqueVertexLabels()
         var pickedLabel: Int? = labels.firstOrNull()
         fun selectedLabel(): Int? = pickedLabel
-        fun clearVskin() {
-            pickedLabel = null
-            pickedLabelUi.text = "no vskin"
-            showLabel(null)
-            gizmo.root.isVisible = false
-            refreshTimeline()
-            applyPose()
-        }
+        var clearVskin: () -> Unit = {}
         val pickedLabelUi = Label(
             pickedLabel?.let { "vskin $it  (${model.vertexCountForLabel(it)} verts)" } ?: "no vskin",
         )
@@ -420,6 +413,14 @@ class ModelViewer : Application() {
             )
             syncDeformedGeometry()
             if (fullUi) refreshTimeline()
+        }
+        clearVskin = {
+            pickedLabel = null
+            pickedLabelUi.text = "no vskin"
+            showLabel(null)
+            gizmo.root.isVisible = false
+            refreshTimeline()
+            applyPose()
         }
         applySnap = { snap ->
             seqFrames = snap.frames.toMutableList()
