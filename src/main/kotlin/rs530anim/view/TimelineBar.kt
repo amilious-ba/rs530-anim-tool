@@ -67,7 +67,8 @@ class TimelineBar(
     private val bodyScroll = ScrollPane(body).apply {
         hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
         vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
-        prefHeight = 176.0
+        minHeight = 80.0
+        prefHeight = 140.0
         style = PANE
     }
 

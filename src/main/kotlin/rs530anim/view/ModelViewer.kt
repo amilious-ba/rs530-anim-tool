@@ -652,9 +652,10 @@ class ModelViewer : Application() {
             style = "-fx-background-color: #1e1e22; -fx-background: #1e1e22;"
         }
 
-        val sub = SubScene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
+        val sub = SubScene(root, 200.0, 200.0, true, SceneAntialiasing.BALANCED)
         sub.fill = Color.rgb(32, 32, 36)
         sub.camera = camera
+        sub.isManaged = false
 
         var lastX = 0.0
         var lastY = 0.0
@@ -869,7 +870,9 @@ class ModelViewer : Application() {
         }
         HBox.setHgrow(statusText, Priority.ALWAYS)
 
+        stack.minHeight = 0.0
         val work = BorderPane()
+        work.minHeight = 0.0
         work.center = stack
         work.left = sideScroll
         timeline.root.minHeight = 220.0
@@ -914,6 +917,10 @@ class ModelViewer : Application() {
             }
         }
         stage.show()
+        Platform.runLater {
+            pane.requestLayout()
+            fitSub()
+        }
         val scanBase = seqFrames.firstOrNull()?.base?.id
         if (scanBase != null) {
             Thread {
