@@ -143,33 +143,46 @@ class AnimFrame(
         }
 
         /**
-         * Build a frame from editor values (already in method4569 space).
-         * Encodes then decodes so prevOriginIndices match the client walk.
+         * Build a live editor frame in method4569 space.
+         * Does not pack/unpack through encode(); that path is for extras export only.
          */
         fun fromEdits(base: AnimBase, edits: List<GroupEdit>): AnimFrame {
             val bySlot = edits.associateBy { it.slot }
             val used = mutableListOf<GroupEdit>()
+            val prev = mutableListOf<Short>()
+            var prevOrigin = -1
+            var prevUsedOrigin = -1
             for (slot in 0 until base.transforms) {
+                if (base.types[slot] == TransformType.ORIGIN) prevOrigin = slot
                 val edit = bySlot[slot] ?: continue
                 val type = base.types[slot]
                 val def = if (type == TransformType.SCALE) 128 else 0
-                if (edit.x != def || edit.y != def || edit.z != def || edit.flags != 0) {
-                    used += edit
+                if (edit.x == def && edit.y == def && edit.z == def && edit.flags == 0) continue
+                var originLink = (-1).toShort()
+                when (type) {
+                    TransformType.TRANSLATE, TransformType.ROTATE, TransformType.SCALE -> {
+                        if (prevOrigin > prevUsedOrigin) {
+                            originLink = prevOrigin.toShort()
+                            prevUsedOrigin = prevOrigin
+                        }
+                    }
+                    TransformType.ORIGIN -> prevUsedOrigin = slot
                 }
+                used += edit
+                prev += originLink
             }
             val n = used.size
-            val draft = AnimFrame(
+            return AnimFrame(
                 base = base,
                 indices = ShortArray(n) { used[it].slot.toShort() },
                 x = ShortArray(n) { used[it].x.toShort() },
                 y = ShortArray(n) { used[it].y.toShort() },
                 z = ShortArray(n) { used[it].z.toShort() },
-                prevOriginIndices = ShortArray(n) { -1 },
+                prevOriginIndices = ShortArray(n) { prev[it] },
                 flags = ByteArray(n) { (used[it].flags and 0x3).toByte() },
                 transformsAlpha = used.any { base.types[it.slot] == TransformType.ALPHA },
                 transformsColor = used.any { base.types[it.slot] == TransformType.COLOR },
             )
-            return decode(draft.encode(), base)
         }
 
         /** Client post-read for type 2. */
