@@ -459,7 +459,24 @@ class ModelViewer : Application() {
 
         val seqBox = ComboBox<NpcCatalog.SeqRef>()
         seqBox.prefWidth = 220.0
-        seqBox.items.addAll(NpcCatalog.sequencesForModels(modelIds))
+        seqBox.isEditable = true
+        val seqChoices = linkedMapOf<Int, NpcCatalog.SeqRef>()
+        for (r in NpcCatalog.sequencesForModels(modelIds)) seqChoices[r.id] = r
+        val scanBase = seqFrames.firstOrNull()?.base?.id
+        if (scanBase != null) {
+            try {
+                Js5Store(settings).use { store ->
+                    val found = AnimLibrary.seqsUsingBase(store, scanBase)
+                    println("seqs on base $scanBase: ${found.size}  ${found.take(24)}")
+                    for (id in found) {
+                        seqChoices.putIfAbsent(id, NpcCatalog.SeqRef(id, "base $scanBase"))
+                    }
+                }
+            } catch (e: Exception) {
+                System.err.println("seq scan skipped: ${e.message}")
+            }
+        }
+        seqBox.items.addAll(seqChoices.values)
         val currentSeq = seqIdLoaded
         if (currentSeq != null) {
             val match = seqBox.items.firstOrNull { it.id == currentSeq }
@@ -472,11 +489,13 @@ class ModelViewer : Application() {
             }
         }
         seqBox.setOnAction {
-            val ref = seqBox.selectionModel.selectedItem ?: return@setOnAction
-            if (ref.id == seqIdLoaded) return@setOnAction
+            val typed = seqBox.editor.text.trim().substringBefore(' ').toIntOrNull()
+            val ref = seqBox.selectionModel.selectedItem
+            val id = ref?.id ?: typed ?: return@setOnAction
+            if (id == seqIdLoaded) return@setOnAction
             if (playing) togglePlay()
-            if (!loadSequence(ref.id)) return@setOnAction
-            extrasIdField.text = ref.id.toString()
+            if (!loadSequence(id)) return@setOnAction
+            extrasIdField.text = id.toString()
             frameSlider.max = (seqFrames.size - 1).coerceAtLeast(0).toDouble()
             frameSlider.value = 0.0
             timelineEnabled(seqFrames.isNotEmpty())
