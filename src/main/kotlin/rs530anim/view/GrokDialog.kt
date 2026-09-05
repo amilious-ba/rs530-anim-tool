@@ -137,7 +137,17 @@ object GrokDialog {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPromptNew, user)
                     val count = GrokAnimClient.parseFrameCount(raw, frames.size)
-                    val patches = GrokAnimClient.sanitizePatches(GrokAnimClient.parsePatches(raw, count))
+                    val parsed = GrokAnimClient.sanitizePatches(GrokAnimClient.parsePatches(raw, count))
+                    val patches = GrokAnimClient.enforcePromptHints(
+                        prompt,
+                        parsed,
+                        frames.first().base,
+                        labels,
+                        count,
+                        vertsOf,
+                    )
+                    println("Grok new patches=${patches.size}")
+                    patches.forEach { println("  f${it.frame} v${it.label} t${it.type} ${it.x},${it.y},${it.z}") }
                     Platform.runLater {
                         generate.isDisable = false
                         if (patches.isEmpty()) {

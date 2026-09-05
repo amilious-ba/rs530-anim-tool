@@ -1,5 +1,6 @@
 package rs530anim.ai
 
+import rs530anim.anim.AnimBase
 import rs530anim.anim.AnimFrame
 import rs530anim.anim.TransformType
 import java.io.BufferedReader
@@ -249,6 +250,54 @@ object GrokAnimClient {
         {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
         Include several limb rotates across frames. Never return empty patches.
     """.trimIndent()
+
+    fun bodyLabel(base: AnimBase, labels: List<Int>, vertsOf: (Int) -> Int): Int? {
+        return labels
+            .filter { it > 0 && base.slotFor(it, TransformType.ROTATE) != null }
+            .maxByOrNull { vertsOf(it) }
+            ?: labels.filter { it > 0 }.maxByOrNull { vertsOf(it) }
+    }
+
+    fun enforcePromptHints(
+        prompt: String,
+        patches: List<TrackPatch>,
+        base: AnimBase,
+        labels: List<Int>,
+        frameCount: Int,
+        vertsOf: (Int) -> Int,
+    ): List<TrackPatch> {
+        val text = prompt.lowercase()
+        val wantsTurn = listOf("turn", "spin", "around", "180", "360").any { it in text }
+        val wantsShake = listOf("shake", "wiggle", "butt", "hip", "twerk").any { it in text }
+        if (!wantsTurn && !wantsShake) return patches
+        val body = bodyLabel(base, labels, vertsOf) ?: return patches
+        val out = patches.toMutableList()
+        val maxRotY = patches.filter { it.label == body && it.type == TransformType.ROTATE }
+            .maxOfOrNull { kotlin.math.abs(it.y) } ?: 0
+        if (wantsTurn && maxRotY < 400 && base.slotFor(body, TransformType.ROTATE) != null) {
+            val mid = (frameCount - 1).coerceAtLeast(1)
+            val half = mid / 2
+            out.removeAll { it.label == body && it.type == TransformType.ROTATE }
+            for (f in 0 until frameCount) {
+                val y = when {
+                    f <= half -> (1024.0 * f / half.coerceAtLeast(1)).toInt()
+                    else -> (1024.0 * (mid - f) / (mid - half).coerceAtLeast(1)).toInt()
+                }.coerceIn(0, 2047)
+                val shake = if (wantsShake && f in 1 until mid) (if (f % 2 == 0) 90 else -90) else 0
+                out += TrackPatch(f, body, TransformType.ROTATE, shake, y, shake / 2, 5)
+            }
+        } else if (wantsShake && base.slotFor(body, TransformType.ROTATE) != null) {
+            for (f in 1 until (frameCount - 1).coerceAtLeast(1)) {
+                val s = if (f % 2 == 0) 70 else -70
+                out += TrackPatch(f, body, TransformType.ROTATE, s, 0, s / 2, 5)
+                if (base.slotFor(body, TransformType.TRANSLATE) != null) {
+                    out += TrackPatch(f, body, TransformType.TRANSLATE, 0, 0, s / 3, 5)
+                }
+            }
+        }
+        out.removeAll { it.type == TransformType.TRANSLATE && kotlin.math.abs(it.y) > 20 && it.label == body }
+        return out.sortedWith(compareBy({ it.frame }, { it.label }, { it.type }))
+    }
 
     fun sanitizePatches(patches: List<TrackPatch>, allowRoot: Boolean = false): List<TrackPatch> {
         return patches.filter { p ->
