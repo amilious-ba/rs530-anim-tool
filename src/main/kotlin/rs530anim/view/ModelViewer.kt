@@ -27,6 +27,7 @@ import javafx.scene.Node
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.SeparatorMenuItem
 import javafx.scene.control.Slider
+import javafx.scene.control.SplitPane
 import javafx.scene.control.TextField
 import javafx.scene.control.ToggleButton
 import javafx.scene.control.ToggleGroup
@@ -669,6 +670,7 @@ class ModelViewer : Application() {
                 val axis = gizmo.axis
                 if (lab != null && axis != null) {
                     val type = editType()
+                    if (currentFrame !in seqFrames.indices) return@setOnMouseDragged
                     val frame = seqFrames[currentFrame]
                     val def = if (type == TransformType.SCALE) 128 else 0
                     val cur = frame.valuesForLabel(lab, type) ?: Triple(def, def, def)
@@ -771,9 +773,8 @@ class ModelViewer : Application() {
         timeline.setEnabled(seqFrames.isNotEmpty())
         timeline.setPlaying(false)
 
-        timeline.root.minHeight = 180.0
-        timeline.root.prefHeight = 230.0
-        timeline.root.maxHeight = 230.0
+        timeline.root.minHeight = 140.0
+        timeline.root.prefHeight = 240.0
 
         val exportItem = MenuItem("Export extras…")
         exportItem.setOnAction { exportBtn.fire() }
@@ -859,10 +860,13 @@ class ModelViewer : Application() {
         val work = BorderPane()
         work.center = stack
         work.left = sideScroll
-        work.bottom = timeline.root
+        val split = SplitPane(work, timeline.root)
+        split.orientation = javafx.geometry.Orientation.VERTICAL
+        split.setDividerPositions(0.70)
+        SplitPane.setResizableWithParent(timeline.root, true)
         val pane = BorderPane()
         pane.top = menuBar
-        pane.center = work
+        pane.center = split
         pane.bottom = statusBar
         fun fitSub() {
             val w = stack.width

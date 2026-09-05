@@ -120,6 +120,7 @@ data class Rs2Model(
         val counts = IntArray(256)
         var max = 0
         for (bone in vertexBones) {
+            if (bone !in 0..255) continue
             counts[bone]++
             if (bone > max) max = bone
         }
@@ -127,6 +128,7 @@ data class Rs2Model(
         val fill = IntArray(max + 1)
         for (i in vertexBones.indices) {
             val bone = vertexBones[i]
+            if (bone !in 0..max) continue
             groups[bone][fill[bone]++] = i
         }
         return groups

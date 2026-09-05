@@ -33,8 +33,9 @@ class ModelAnimator(private val model: Rs2Model) {
         val base = frame.base
         for (i in 0 until frame.length) {
             val slot = frame.indices[i].toInt()
+            if (slot !in base.types.indices) continue
             val prev = frame.prevOriginIndices[i].toInt()
-            if (prev != -1) {
+            if (prev in base.bones.indices) {
                 method4569(TransformType.ORIGIN, base.bones[prev], 0, 0, 0)
             }
             method4569(
