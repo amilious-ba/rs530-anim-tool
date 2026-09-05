@@ -155,16 +155,7 @@ class ModelViewer : Application() {
         val undoStack = ArrayDeque<AnimSnap>()
         val redoStack = ArrayDeque<AnimSnap>()
         var histLock = false
-        fun applySnap(snap: AnimSnap) {
-            seqFrames = snap.frames.toMutableList()
-            seqDelays = snap.delays.copyOf()
-            if (seqFrames.isNotEmpty()) {
-                currentFrame = snap.frame.coerceIn(0, seqFrames.lastIndex)
-                frameSlider.value = currentFrame.toDouble()
-            }
-            loadSlidersFromFrame()
-            applyPose(fullUi = true)
-        }
+        var applySnap: (AnimSnap) -> Unit = {}
         markBaseline = {
             baseline = takeSnap()
             undoStack.clear()
@@ -178,26 +169,30 @@ class ModelViewer : Application() {
             }
         }
         undoEdit = {
-            if (undoStack.isEmpty()) return@undoEdit
-            histLock = true
-            redoStack.addLast(takeSnap())
-            applySnap(undoStack.removeLast())
-            histLock = false
+            if (undoStack.isNotEmpty()) {
+                histLock = true
+                redoStack.addLast(takeSnap())
+                applySnap(undoStack.removeLast())
+                histLock = false
+            }
         }
         redoEdit = {
-            if (redoStack.isEmpty()) return@redoEdit
-            histLock = true
-            undoStack.addLast(takeSnap())
-            applySnap(redoStack.removeLast())
-            histLock = false
+            if (redoStack.isNotEmpty()) {
+                histLock = true
+                undoStack.addLast(takeSnap())
+                applySnap(redoStack.removeLast())
+                histLock = false
+            }
         }
         resetEdits = {
-            val snap = baseline ?: return@resetEdits
-            histLock = true
-            undoStack.clear()
-            redoStack.clear()
-            applySnap(snap)
-            histLock = false
+            val snap = baseline
+            if (snap != null) {
+                histLock = true
+                undoStack.clear()
+                redoStack.clear()
+                applySnap(snap)
+                histLock = false
+            }
         }
 
         val world = Group()
@@ -419,6 +414,16 @@ class ModelViewer : Application() {
             )
             syncDeformedGeometry()
             if (fullUi) refreshTimeline()
+        }
+        applySnap = { snap ->
+            seqFrames = snap.frames.toMutableList()
+            seqDelays = snap.delays.copyOf()
+            if (seqFrames.isNotEmpty()) {
+                currentFrame = snap.frame.coerceIn(0, seqFrames.lastIndex)
+                frameSlider.value = currentFrame.toDouble()
+            }
+            loadSlidersFromFrame()
+            applyPose(fullUi = true)
         }
 
         frameSlider.valueProperty().addListener { _, _, _ ->
