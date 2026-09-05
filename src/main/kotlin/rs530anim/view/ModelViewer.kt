@@ -52,6 +52,7 @@ import javafx.scene.transform.Rotate
 import javafx.stage.Stage
 import rs530anim.MonkeySkins
 import rs530anim.NpcCatalog
+import rs530anim.NpcRow
 import rs530anim.anim.AnimLibrary
 import rs530anim.anim.ModelAnimator
 import rs530anim.cache.CacheSettings
@@ -458,7 +459,7 @@ class ModelViewer : Application() {
             frameSlider.value = i.coerceIn(0, seqFrames.lastIndex).toDouble()
         }
 
-        val modelBox = ComboBox<NpcCatalog.NpcRow>()
+        val modelBox = ComboBox<NpcRow>()
         modelBox.prefWidth = 220.0
         val pinned = listOf(132, 4344, 1455, 1456, 1457, 1465, 1466, 1467)
         modelBox.items.addAll(pinned.mapNotNull { NpcCatalog.get(it) }.distinctBy { it.id })
