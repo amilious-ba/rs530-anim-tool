@@ -146,7 +146,6 @@ class ModelViewer : Application() {
                 false
             }
         }
-        centerModel(model)
         var animator = ModelAnimator(model)
         var bind = animator.copyBindPose()
         var currentFrame = frameNo.coerceIn(0, (seqFrames.size - 1).coerceAtLeast(0))
@@ -640,7 +639,6 @@ class ModelViewer : Application() {
                     m
                 }
                 if (playing) togglePlay()
-                centerModel(loaded)
                 model = loaded
                 modelIds = next
                 loadedNpcId = id
@@ -1405,18 +1403,17 @@ private fun axisCompass(yaw: Rotate, pitch: Rotate): SubScene {
     return scene
 }
 
-/** Wire rectangle on XZ at the feet, plus a notch on −Z (toward the default camera). */
+/** Tile plane at model origin Y=0 — same place the client plants an NPC. */
 private fun groundMarker(model: Rs2Model): MeshView {
-    var minX = 0; var maxX = 0; var maxY = 0; var minZ = 0; var maxZ = 0
+    var minX = 0; var maxX = 0; var minZ = 0; var maxZ = 0
     if (model.vertexCount > 0) {
         minX = model.verticesX.minOrNull() ?: 0
         maxX = model.verticesX.maxOrNull() ?: 0
-        maxY = model.verticesY.maxOrNull() ?: 0
         minZ = model.verticesZ.minOrNull() ?: 0
         maxZ = model.verticesZ.maxOrNull() ?: 0
     }
     val pad = 12f
-    val y = maxY.toFloat()
+    val y = 0f
     val x0 = minX.toFloat() - pad
     val x1 = maxX.toFloat() + pad
     val z0 = minZ.toFloat() - pad
@@ -1441,28 +1438,8 @@ private fun groundMarker(model: Rs2Model): MeshView {
     return view
 }
 
-private fun centerModel(model: Rs2Model) {
-    if (model.vertexCount == 0) return
-    var minX = Int.MAX_VALUE
-    var minY = Int.MAX_VALUE
-    var minZ = Int.MAX_VALUE
-    var maxX = Int.MIN_VALUE
-    var maxY = Int.MIN_VALUE
-    var maxZ = Int.MIN_VALUE
-    for (i in 0 until model.vertexCount) {
-        minX = minOf(minX, model.verticesX[i]); maxX = maxOf(maxX, model.verticesX[i])
-        minY = minOf(minY, model.verticesY[i]); maxY = maxOf(maxY, model.verticesY[i])
-        minZ = minOf(minZ, model.verticesZ[i]); maxZ = maxOf(maxZ, model.verticesZ[i])
-    }
-    val cx = (minX + maxX) / 2
-    val cy = (minY + maxY) / 2
-    val cz = (minZ + maxZ) / 2
-    for (i in 0 until model.vertexCount) {
-        model.verticesX[i] -= cx
-        model.verticesY[i] -= cy
-        model.verticesZ[i] -= cz
-    }
-}
+
+
 
 /** GlModel type-0 P/M/N barycentric, type-2 cylindrical (method4095/4097). */
 private fun clientPmnUv(model: Rs2Model, face: Int, vertex: Int): Pair<Float, Float>? {
