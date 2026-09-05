@@ -660,10 +660,12 @@ class ModelViewer : Application() {
         var lastY = 0.0
         var dragDist = 0.0
         var gizmoDrag = false
+        var gizmoAccum = 0.0
         sub.setOnMousePressed { e ->
             lastX = e.sceneX
             lastY = e.sceneY
             dragDist = 0.0
+            gizmoAccum = 0.0
             gizmoDrag = e.button == MouseButton.PRIMARY && gizmo.begin(e.pickResult?.intersectedNode)
         }
         sub.setOnMouseDragged { e ->
@@ -680,13 +682,18 @@ class ModelViewer : Application() {
                     val def = if (type == TransformType.SCALE) 128 else 0
                     val cur = frame.valuesForLabel(lab, type) ?: Triple(def, def, def)
                     val parts = intArrayOf(cur.first, cur.second, cur.third)
-                    val delta = ((dx - dy) * if (type == TransformType.ROTATE) 0.12 else 0.2).toInt()
-                    val lo = if (type == TransformType.ROTATE) 0 else -2047
-                    val hi = 2047
-                    parts[axis] = (parts[axis] + delta).coerceIn(lo, hi)
-                    seqFrames[currentFrame] = frame.withLabelValues(lab, type, parts[0], parts[1], parts[2])
-                    loadSlidersFromFrame()
-                    applyPose(fullUi = false)
+                    val sens = if (type == TransformType.ROTATE) 2.2 else 1.4
+                    gizmoAccum += (dx - dy) * sens
+                    val delta = gizmoAccum.toInt()
+                    if (delta != 0) {
+                        gizmoAccum -= delta
+                        val lo = if (type == TransformType.ROTATE) 0 else -2047
+                        val hi = 2047
+                        parts[axis] = (parts[axis] + delta).coerceIn(lo, hi)
+                        seqFrames[currentFrame] = frame.withLabelValues(lab, type, parts[0], parts[1], parts[2])
+                        loadSlidersFromFrame()
+                        applyPose(fullUi = false)
+                    }
                 }
             } else if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
                 yaw.angle += dx * 0.4
