@@ -63,8 +63,8 @@ import kotlin.math.max
 
 class ModelViewer : Application() {
     override fun start(stage: Stage) {
-        val raw = parameters.raw
-        val modelSpec = raw.getOrNull(0) ?: "1456"
+        val raw = parameters.raw.ifEmpty { bootArgs }
+        val modelSpec = raw.getOrNull(0) ?: "3004"
         val modelIds = MonkeySkins.resolve(modelSpec)
         val seqId = raw.getOrNull(1)?.toIntOrNull()
         val frameNo = raw.getOrNull(2)?.toIntOrNull() ?: 0
@@ -642,9 +642,21 @@ class ModelViewer : Application() {
         exportItem.setOnAction { exportBtn.fire() }
         val importItem = MenuItem("Import extras…")
         importItem.setOnAction { importBtn.fire() }
+        val openNpcItem = MenuItem("Open NPC…")
+        openNpcItem.setOnAction {
+            val dlg = javafx.scene.control.TextInputDialog("132")
+            dlg.title = "Open NPC"
+            dlg.headerText = "Load an NPC by id. 132 is the default Monkey."
+            val id = dlg.showAndWait().orElse(null)?.trim()?.toIntOrNull() ?: return@setOnAction
+            val row = NpcCatalog.get(id)
+            val models = NpcCatalog.modelsFor(id)
+            val atk = row?.attack?.takeIf { it > 0 }
+            stage.close()
+            openWindow(listOf(models.joinToString("+")) + listOfNotNull(atk?.toString()))
+        }
         val exitItem = MenuItem("Exit")
         exitItem.setOnAction { Platform.exit() }
-        val fileMenu = Menu("File", null, exportItem, importItem, SeparatorMenuItem(), exitItem)
+        val fileMenu = Menu("File", null, openNpcItem, SeparatorMenuItem(), exportItem, importItem, SeparatorMenuItem(), exitItem)
 
         val playItem = MenuItem("Play / Pause")
         playItem.setOnAction { togglePlay() }
@@ -758,8 +770,16 @@ class ModelViewer : Application() {
     }
 
     companion object {
+        private var bootArgs: List<String> = emptyList()
+
         fun open(args: List<String>) {
+            bootArgs = args
             launch(ModelViewer::class.java, *args.toTypedArray())
+        }
+
+        fun openWindow(args: List<String>) {
+            bootArgs = args
+            ModelViewer().start(Stage())
         }
     }
 }

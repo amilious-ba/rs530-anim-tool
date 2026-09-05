@@ -76,7 +76,11 @@ fun main(args: Array<String>) {
         "view" -> {
             val rest = parsed.rest
             when {
-                rest.isEmpty() -> rs530anim.view.ModelViewer.open(listOf("132"))
+                rest.isEmpty() -> {
+                    val models = NpcCatalog.modelsFor(132)
+                    val atk = NpcCatalog.get(132)?.attack
+                    rs530anim.view.ModelViewer.open(listOf(models.joinToString("+")) + listOfNotNull(atk?.toString()))
+                }
                 rest[0].equals("npc", ignoreCase = true) && rest.size >= 2 -> {
                     val nid = rest[1].toIntOrNull()
                     if (nid == null) {

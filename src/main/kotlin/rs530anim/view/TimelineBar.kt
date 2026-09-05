@@ -182,17 +182,13 @@ class TimelineBar(
         var row = 0
         for (lab in labs) {
             val types = typesForLabel(base, lab)
-            val primary = types.firstOrNull() ?: TransformType.TRANSLATE
-            val open = lab in expanded
             addRow(row)
-            groupRow(lab, primary, types, open, list, cur, selLab, row)
+            groupHeader(lab, types, selLab, row)
             row++
-            if (open) {
-                for (type in types) {
-                    addRow(row)
-                    trackRow(lab, type, "    ${shortName(type)}", list, cur, selLab, selType, row)
-                    row++
-                }
+            for (type in types) {
+                addRow(row)
+                trackRow(lab, type, "    ${shortName(type)}", list, cur, selLab, selType, row)
+                row++
             }
         }
     }
@@ -210,27 +206,12 @@ class TimelineBar(
         return CHANNELS.filter { it in found }
     }
 
-    private fun groupRow(
-        label: Int,
-        primary: Int,
-        types: List<Int>,
-        open: Boolean,
-        list: List<AnimFrame>,
-        cur: Int,
-        selLab: Int?,
-        row: Int,
-    ) {
-        val mark = if (open) "−" else "+"
+    private fun groupHeader(label: Int, types: List<Int>, selLab: Int?, row: Int) {
         val extra = types.joinToString(" ") { shortName(it) }
-        val title = "$mark  vskin $label"
-        val name = headerCell(title, NAME_W, selected = selLab == label)
-        name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
-            if (open) expanded.remove(label) else expanded += label
-            refresh()
-        }
+        val name = headerCell("vskin $label", NAME_W, selected = selLab == label)
         Tooltip.install(name, Tooltip("vskin $label  $extra"))
         names.add(name, 0, row)
-        val span = (list.size * 3).coerceAtLeast(1)
+        val span = (frames().size * 3).coerceAtLeast(1)
         val spacer = Rectangle(AXIS_W * span, ROW_H, Color.rgb(24, 24, 28))
         spacer.stroke = Color.rgb(40, 40, 46)
         body.add(spacer, 0, row, span, 1)
