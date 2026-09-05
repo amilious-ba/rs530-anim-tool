@@ -185,10 +185,12 @@ class ModelViewer : Application() {
         val frameLabel = Label(if (seqFrames.isEmpty()) "no seq" else "frame $currentFrame / ${seqFrames.size}")
 
         val typeGroup = ToggleGroup()
-        val rotBtn = ToggleButton("rotate").apply { toggleGroup = typeGroup; isSelected = true }
-        val moveBtn = ToggleButton("translate").apply { toggleGroup = typeGroup }
+        val selectBtn = ToggleButton("select").apply { toggleGroup = typeGroup; isSelected = true }
+        val moveBtn = ToggleButton("move").apply { toggleGroup = typeGroup }
+        val rotBtn = ToggleButton("rotate").apply { toggleGroup = typeGroup }
 
         fun editType(): Int = if (rotBtn.isSelected) TransformType.ROTATE else TransformType.TRANSLATE
+        fun toolIsGizmo(): Boolean = moveBtn.isSelected || rotBtn.isSelected
         fun sliderMax(): Double = if (rotBtn.isSelected) 2047.0 else 512.0
         fun sliderMin(): Double = if (rotBtn.isSelected) 0.0 else -512.0
         val sx = Slider(sliderMin(), sliderMax(), 0.0)
@@ -220,7 +222,7 @@ class ModelViewer : Application() {
         fun refreshGizmo() {
             val lab = selectedLabel()
             val c = labelCenter(lab)
-            if (c == null) {
+            if (!toolIsGizmo() || c == null) {
                 gizmo.root.isVisible = false
                 return
             }
@@ -330,7 +332,10 @@ class ModelViewer : Application() {
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 try {
-                    animator.apply(seqFrames[currentFrame])
+                    animator.apply(
+                        seqFrames[currentFrame],
+                        isolateLabel = if (playing) null else selectedLabel(),
+                    )
                 } catch (e: Exception) {
                     System.err.println("apply frame $currentFrame: ${e.javaClass.simpleName}: ${e.message}")
                     e.printStackTrace()
@@ -667,7 +672,8 @@ class ModelViewer : Application() {
             lastY = e.sceneY
             dragDist = 0.0
             gizmoAccum = 0.0
-            gizmoDrag = e.button == MouseButton.PRIMARY && gizmo.begin(e.pickResult?.intersectedNode)
+            gizmoDrag = e.button == MouseButton.PRIMARY && toolIsGizmo() &&
+                gizmo.begin(e.pickResult?.intersectedNode)
         }
         sub.setOnMouseDragged { e ->
             val dx = e.sceneX - lastX
@@ -860,7 +866,7 @@ class ModelViewer : Application() {
 
         val helpMenu = Menu("Help", null, aboutItem)
         val menuBar = MenuBar(fileMenu, viewMenu, playMenu, helpMenu)
-        timeline.setTools(moveBtn, rotBtn, texToggle, wireToggle, vertToggle)
+        timeline.setTools(selectBtn, moveBtn, rotBtn, texToggle, wireToggle, vertToggle)
 
         val statusText = Label("ready").apply { textFill = Color.rgb(200, 200, 206) }
         windowStatus = { statusText.text = it }

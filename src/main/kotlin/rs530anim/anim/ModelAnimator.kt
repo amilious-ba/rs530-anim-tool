@@ -29,7 +29,7 @@ class ModelAnimator(private val model: Rs2Model) {
         originZ = 0
     }
 
-    fun apply(frame: AnimFrame) {
+    fun apply(frame: AnimFrame, isolateLabel: Int? = null) {
         val base = frame.base
         for (i in 0 until frame.length) {
             val slot = frame.indices[i].toInt()
@@ -38,13 +38,15 @@ class ModelAnimator(private val model: Rs2Model) {
             if (prev in base.bones.indices) {
                 method4569(TransformType.ORIGIN, base.bones[prev], 0, 0, 0)
             }
-            method4569(
-                base.types[slot],
-                base.bones[slot],
-                frame.x[i].toInt(),
-                frame.y[i].toInt(),
-                frame.z[i].toInt(),
-            )
+            val type = base.types[slot]
+            val labels = base.bones[slot]
+            val targets =
+                if (isolateLabel != null && type != TransformType.ORIGIN && isolateLabel in labels) {
+                    intArrayOf(isolateLabel)
+                } else {
+                    labels
+                }
+            method4569(type, targets, frame.x[i].toInt(), frame.y[i].toInt(), frame.z[i].toInt())
         }
     }
 
