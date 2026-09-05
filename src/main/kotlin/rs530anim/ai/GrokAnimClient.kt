@@ -206,7 +206,7 @@ object GrokAnimClient {
         append("NPC id=").append(npcId ?: -1)
         append(" name=\"").append(npcName ?: "unknown").append('"')
         append(" model ids=").append(modelIds.joinToString("+")).append('\n')
-        append("This is that NPC's world mesh. Each vskin is a vertex group on it.\n")
+        append("This is that NPC's world mesh. Playback is identical to the 530 client.\n")
         append("Biggest non-zero vskin is usually the body; vskin 0 is a tiny origin locator.\n")
         append("Label sizes:\n")
         for (lab in labels) {
@@ -217,40 +217,40 @@ object GrokAnimClient {
     }
 
     fun playbackNotes(): String = """
-        Timing: delay is in client ticks. 1 tick = 20 ms. delay 5 = 100 ms. Typical attack frames use 3-8 ticks.
-        Execution (SoftwareModel.method4569), every frame from bind pose:
-          type 0 origin: average the verts of those labels; that point is the pivot for later groups.
-          type 1 translate: add x/y/z to verts of those labels only.
-          type 2 rotate: rotate those labels around the current origin. Units 0..2047, 2048 = 360 deg.
-          type 3 scale: scale those labels around the origin; 128 = 1.0.
-        Y is down. Raising a limb is negative translate Y, not moving every label.
-        Turning the character is rotate-y on the large body label (y≈1024 is 180 degrees), not a world translate.
-        Position offsets on limbs are allowed and expected (small translate x/z, tens of units).
-        Do not copy the same xyz onto every vskin.
-        Translate magnitudes: tens to low hundreds. Rotate deltas from rest: 40-1024.
+        Timing: delay is client ticks. 1 tick = 20 ms. delay 5 = 100 ms. Typical frames use 3-8 ticks.
+        Client playback (Model.method4553 + SoftwareModel.method4569), every frame from bind pose:
+          if prevOrigin is set, type 0 origin: average verts of that slot's labels → pivot
+          type 1 translate: add xyz to EVERY label listed on that AnimBase slot
+          type 2 rotate: rotate EVERY label on that slot around the pivot. 0..2047, 2048 = 360 deg
+          type 3 scale: scale those labels around the pivot; 128 = 1.0
+        A patch names a vskin+type. The editor writes the tightest slot that contains that vskin.
+        The client then applies that slot to all labels on it. If the slot lists 1,4,7 they all move.
+        Look at the slot list. Prefer a vskin that has its own small slot. A shared body slot turns the whole mesh.
+        Y is down. Raise = negative translate Y. Turn around = rotate y ≈ 1024 on the body slot.
+        Do not emit origin keys or translate vskin 0 unless asked. Do not emit one xyz for every vskin.
+        Translate tens to low hundreds. Rotate deltas 40-1024.
     """.trimIndent() + "\n"
 
     val systemPrompt: String = """
-        You edit RuneScape revision 530 vskin animation tracks.
-        Follow the playback notes in the user message.
+        You edit revision-530 AnimFrame groups the same way the 2009scape client plays them.
+        Follow the playback notes and AnimBase slot list. One xyz per slot is applied to every label on that slot.
         Never return an empty patches array.
-        Use rotate AND translate where the motion needs both.
-        Do not translate vskin 0. Do not write the same xyz on every label.
-        If the user says selected group, use selected=.
+        Use rotate and translate where needed. Do not translate vskin 0.
+        If the user says selected group, patch that vskin's tightest slot.
         JSON only:
         {"patches":[{"frame":2,"label":1,"type":"rotate","x":80,"y":0,"z":0,"delay":5}]}
     """.trimIndent()
 
     val systemPromptNew: String = """
-        You author a NEW revision-530 label animation on the given AnimBase.
-        Follow the playback notes and slot list in the user message.
-        Use rotate on the body label to turn. Use small translates on body/hips/limbs for shakes.
-        Forbidden: origin keys, the same xyz on every vskin, huge root translates.
-        Frame count 4..12. Delays are ticks (20 ms each), use 4-8.
-        Treat the included grid as a reference performance, not something to copy frame-for-frame.
+        You author a NEW revision-530 AnimFrame clip on the given AnimBase.
+        The client will play it with method4553/method4569: bind pose, origin pivot, then each slot's xyz on all labels in that slot.
+        Follow the slot list. A patch on a shared slot moves every label in it. That is correct client behavior.
+        Use rotate y on the body slot to turn (1024 ≈ 180 deg). Use small translates only on slots that are not the whole mesh.
+        Forbidden: origin keys, translate vskin 0, duplicate xyz on every vskin, huge root translates.
+        Frame count 4..12. Delays are ticks (20 ms), use 4-8.
+        The included grid is a real stock clip for scale, not to replay.
         JSON only:
         {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":0,"y":0,"z":0,"delay":5},{"frame":3,"label":1,"type":"rotate","x":80,"y":1024,"z":0,"delay":5},{"frame":7,"label":1,"type":"rotate","x":0,"y":0,"z":0,"delay":5}]}
-        Example meaning: body rotate y 0 → 1024 (180 deg turn) → 0, with a small x wobble at the midpoint.
     """.trimIndent()
 
     fun bodyLabel(base: AnimBase, labels: List<Int>, vertsOf: (Int) -> Int): Int? {
