@@ -193,6 +193,27 @@ object GrokAnimClient {
         }
     }
 
+    fun characterContext(
+        npcId: Int?,
+        npcName: String?,
+        modelIds: List<Int>,
+        labels: List<Int>,
+        vertsOf: (Int) -> Int,
+    ): String = buildString {
+        append("Game: 2009scape / RuneScape revision 530. Legacy vskin labels, not OSRS skeletal.\n")
+        append("NPC id=").append(npcId ?: -1)
+        append(" name=\"").append(npcName ?: "unknown").append('"')
+        append(" model ids=").append(modelIds.joinToString("+")).append('\n')
+        append("This is that NPC's world mesh. Each vskin is a vertex group on it.\n")
+        append("Biggest non-zero vskin is usually the body; vskin 0 is a tiny origin locator.\n")
+        append("Label sizes:\n")
+        for (lab in labels) {
+            append("  vskin ").append(lab).append(" verts=").append(vertsOf(lab)).append('\n')
+        }
+        append("Turn around = rotate y on the body label (1024 ≈ 180 degrees).\n")
+        append("Butt shake = alternate small rotate x/z plus tiny translate z on body/hips each frame.\n")
+    }
+
     fun playbackNotes(): String = """
         Timing: delay is in client ticks. 1 tick = 20 ms. delay 5 = 100 ms. Typical attack frames use 3-8 ticks.
         Execution (SoftwareModel.method4569), every frame from bind pose:
@@ -201,18 +222,18 @@ object GrokAnimClient {
           type 2 rotate: rotate those labels around the current origin. Units 0..2047, 2048 = 360 deg.
           type 3 scale: scale those labels around the origin; 128 = 1.0.
         Y is down. Raising a limb is negative translate Y, not moving every label.
-        vskin 0 is usually the origin locator, not the floor and not the whole NPC.
-        Do NOT keyframe origin slots or translate vskin 0 unless the user asks to move the root.
-        Do NOT copy the same xyz onto every vskin. Animate limbs with rotate on their own slots.
-        Keep translate magnitudes small (tens, not thousands). Rotate deltas from rest about 40-240.
+        Turning the character is rotate-y on the large body label (y≈1024 is 180 degrees), not a world translate.
+        Position offsets on limbs are allowed and expected (small translate x/z, tens of units).
+        Do not copy the same xyz onto every vskin.
+        Translate magnitudes: tens to low hundreds. Rotate deltas from rest: 40-1024.
     """.trimIndent() + "\n"
 
     val systemPrompt: String = """
         You edit RuneScape revision 530 vskin animation tracks.
         Follow the playback notes in the user message.
         Never return an empty patches array.
-        Prefer rotate on a single limb label. Do not translate vskin 0 or origin slots.
-        Do not write the same xyz on every label.
+        Use rotate AND translate where the motion needs both.
+        Do not translate vskin 0. Do not write the same xyz on every label.
         If the user says selected group, use selected=.
         JSON only:
         {"patches":[{"frame":2,"label":1,"type":"rotate","x":80,"y":0,"z":0,"delay":5}]}
@@ -221,8 +242,8 @@ object GrokAnimClient {
     val systemPromptNew: String = """
         You author a NEW revision-530 label animation on the given AnimBase.
         Follow the playback notes and slot list in the user message.
-        Animate by rotating individual limb labels. Never slide the whole NPC.
-        Forbidden unless the user asks: origin keys, translate on vskin 0, same xyz on every vskin.
+        Use rotate on the body label to turn. Use small translates on body/hips/limbs for shakes.
+        Forbidden: origin keys, the same xyz on every vskin, huge root translates.
         Frame count 4..12. Delays are ticks (20 ms each), use 4-8.
         JSON only:
         {"frameCount":8,"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":5}]}
@@ -234,7 +255,7 @@ object GrokAnimClient {
             if (p.type == TransformType.ORIGIN) return@filter false
             if (!allowRoot && p.label == 0 && p.type == TransformType.TRANSLATE) return@filter false
             val mag = kotlin.math.abs(p.x) + kotlin.math.abs(p.y) + kotlin.math.abs(p.z)
-            if (p.type == TransformType.TRANSLATE && mag > 400) return@filter false
+            if (p.type == TransformType.TRANSLATE && mag > 800) return@filter false
             true
         }
     }

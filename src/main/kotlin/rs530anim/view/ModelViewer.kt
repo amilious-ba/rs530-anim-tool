@@ -898,8 +898,12 @@ class ModelViewer : Application() {
             GrokDialog.promptAndGenerate(
                 seqId = seqIdLoaded,
                 baseId = seqFrames.first().base.id,
+                npcId = loadedNpcId,
+                npcName = loadedNpcId?.let { NpcCatalog.get(it)?.name },
+                modelIds = modelIds,
                 labels = labels,
                 selectedLabel = selectedLabel(),
+                vertsOf = { model.vertexCountForLabel(it) },
                 frames = seqFrames,
                 delays = seqDelays,
             ) { patches ->
@@ -922,7 +926,11 @@ class ModelViewer : Application() {
             GrokDialog.promptAndCreateNew(
                 seqId = seqIdLoaded,
                 baseId = base.id,
+                npcId = loadedNpcId,
+                npcName = loadedNpcId?.let { NpcCatalog.get(it)?.name },
+                modelIds = modelIds,
                 labels = labels,
+                vertsOf = { model.vertexCountForLabel(it) },
                 frames = seqFrames,
                 delays = seqDelays,
             ) { patches, frameCount ->

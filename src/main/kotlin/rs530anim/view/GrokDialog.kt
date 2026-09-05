@@ -32,8 +32,12 @@ object GrokDialog {
     fun promptAndGenerate(
         seqId: Int?,
         baseId: Int?,
+        npcId: Int?,
+        npcName: String?,
+        modelIds: List<Int>,
         labels: List<Int>,
         selectedLabel: Int?,
+        vertsOf: (Int) -> Int,
         frames: List<AnimFrame>,
         delays: IntArray,
         apply: (List<TrackPatch>) -> Unit,
@@ -61,8 +65,9 @@ object GrokDialog {
             if (prompt.isEmpty()) return@setOnAction
             generate.isDisable = true
             status.text = "calling Grok…"
+            val who = GrokAnimClient.characterContext(npcId, npcName, modelIds, labels, vertsOf)
             val snapshot = GrokAnimClient.describeSequence(seqId, baseId, labels, selectedLabel, frames, delays)
-            val user = "Current clip:\n$snapshot\n\nUser request:\n$prompt\n\nReturn at least one patch. selected label=${selectedLabel ?: labels.firstOrNull() ?: 0}."
+            val user = "$who\nCurrent clip:\n$snapshot\n\nUser request:\n$prompt\n\nUse rotate and translate as needed. selected=${selectedLabel ?: labels.firstOrNull() ?: 0}."
             Thread {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPrompt, user)
@@ -93,7 +98,11 @@ object GrokDialog {
     fun promptAndCreateNew(
         seqId: Int?,
         baseId: Int?,
+        npcId: Int?,
+        npcName: String?,
+        modelIds: List<Int>,
         labels: List<Int>,
+        vertsOf: (Int) -> Int,
         frames: List<AnimFrame>,
         delays: IntArray,
         apply: (patches: List<TrackPatch>, frameCount: Int) -> Unit,
@@ -121,8 +130,9 @@ object GrokDialog {
             if (prompt.isEmpty()) return@setOnAction
             generate.isDisable = true
             status.text = "calling Grok…"
+            val who = GrokAnimClient.characterContext(npcId, npcName, modelIds, labels, vertsOf)
             val snapshot = GrokAnimClient.describeFullGrid(seqId, baseId, labels, frames, delays)
-            val user = "Full vskin table for this mesh and base:\n$snapshot\n\nCreate a NEW animation:\n$prompt"
+            val user = "$who\nFull vskin table:\n$snapshot\n\nCreate a NEW animation for this NPC:\n$prompt"
             Thread {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPromptNew, user)
