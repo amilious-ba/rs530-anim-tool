@@ -72,6 +72,7 @@ object Rs2ModelLoader {
         if (hasTriangleBones == 1) offset += triangleCount
         val vertexBonesDataOffset = offset
         if (hasVertexBones == 1) offset += vertexCount
+        val alphaDataOffset = offset
         if (hasAlpha == 1) offset += triangleCount
         val vertexIndexDataOffset = offset
         offset += vertexIndexDataLength
@@ -149,6 +150,11 @@ object Rs2ModelLoader {
         } else {
             null
         }
+        val faceAlpha = if (hasAlpha == 1) {
+            src.copyOfRange(alphaDataOffset, alphaDataOffset + triangleCount)
+        } else {
+            null
+        }
 
         val textureTypes = if (texturedCount > 0) ByteArray(texturedCount) { src[it] } else null
         val textureP = if (texturedCount > 0) ShortArray(texturedCount) else null
@@ -217,6 +223,7 @@ object Rs2ModelLoader {
             faceTextures = faceTextures,
             vertexBones = vertexBones,
             triangleBones = triangleBones,
+            faceAlpha = faceAlpha,
             textureTypes = textureTypes,
             textureP = textureP,
             textureM = textureM,
@@ -255,6 +262,7 @@ object Rs2ModelLoader {
         if (hasInfo == 1) offset += triangleCount
         val vertexBonesOffset = offset
         if (hasVertexBones == 1) offset += vertexCount
+        val alphaDataOffset = offset
         if (hasAlpha == 1) offset += triangleCount
         val vertexIndexDataOffset = offset
         offset += vertexIndexDataLength
@@ -313,6 +321,11 @@ object Rs2ModelLoader {
         } else {
             null
         }
+        val faceAlpha = if (hasAlpha == 1) {
+            src.copyOfRange(alphaDataOffset, alphaDataOffset + triangleCount)
+        } else {
+            null
+        }
 
         return Rs2Model(
             format = "old",
@@ -328,6 +341,7 @@ object Rs2ModelLoader {
             faceTextures = null,
             vertexBones = vertexBones,
             triangleBones = triangleBones,
+            faceAlpha = faceAlpha,
         )
     }
 

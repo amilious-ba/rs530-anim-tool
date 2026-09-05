@@ -19,6 +19,7 @@ data class Rs2Model(
     val faceTextures: ShortArray?,
     val vertexBones: IntArray?,
     val triangleBones: IntArray?,
+    val faceAlpha: ByteArray? = null,
     val textureTypes: ByteArray? = null,
     val textureP: ShortArray? = null,
     val textureM: ShortArray? = null,
@@ -32,6 +33,7 @@ data class Rs2Model(
     val textureOff: ByteArray? = null,
 ) {
     val boneVertices: Array<IntArray> = buildBoneVertices()
+    val boneTriangles: Array<IntArray> = buildBoneTriangles()
 
     fun uniqueVertexLabels(): List<Int> {
         if (vertexBones == null) return emptyList()
@@ -98,6 +100,15 @@ data class Rs2Model(
                 out
             }
         }
+        val alphas = when {
+            faceAlpha == null && other.faceAlpha == null -> null
+            else -> {
+                val out = ByteArray(fc)
+                faceAlpha?.copyInto(out)
+                other.faceAlpha?.copyInto(out, faceCount)
+                out
+            }
+        }
         return Rs2Model(
             format = "$format+${other.format}",
             vertexCount = vc,
@@ -112,6 +123,7 @@ data class Rs2Model(
             faceTextures = textures,
             vertexBones = vBones,
             triangleBones = tBones,
+            faceAlpha = alphas,
         )
     }
 
@@ -128,6 +140,25 @@ data class Rs2Model(
         val fill = IntArray(max + 1)
         for (i in vertexBones.indices) {
             val bone = vertexBones[i]
+            if (bone !in 0..max) continue
+            groups[bone][fill[bone]++] = i
+        }
+        return groups
+    }
+
+    private fun buildBoneTriangles(): Array<IntArray> {
+        if (triangleBones == null || triangleBones.isEmpty()) return emptyArray()
+        val counts = IntArray(256)
+        var max = 0
+        for (bone in triangleBones) {
+            if (bone !in 0..255) continue
+            counts[bone]++
+            if (bone > max) max = bone
+        }
+        val groups = Array(max + 1) { IntArray(counts[it]) }
+        val fill = IntArray(max + 1)
+        for (i in triangleBones.indices) {
+            val bone = triangleBones[i]
             if (bone !in 0..max) continue
             groups[bone][fill[bone]++] = i
         }

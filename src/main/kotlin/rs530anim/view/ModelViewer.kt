@@ -388,7 +388,15 @@ class ModelViewer : Application() {
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 try {
-                    animator.apply(seqFrames[currentFrame])
+                    if (playing && seqFrames.size > 1) {
+                        val delay = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
+                        val delayNs = delay * 20_000_000L
+                        val step = if (delayNs <= 0L) 0 else ((frameElapsedNs * delay) / delayNs).toInt().coerceIn(0, delay - 1)
+                        val next = seqFrames[(currentFrame + 1) % seqFrames.size]
+                        animator.applyTweened(seqFrames[currentFrame], next, step, delay)
+                    } else {
+                        animator.apply(seqFrames[currentFrame])
+                    }
                 } catch (e: Exception) {
                     System.err.println("apply frame $currentFrame: ${e.javaClass.simpleName}: ${e.message}")
                     e.printStackTrace()
@@ -524,19 +532,28 @@ class ModelViewer : Application() {
             }
         }
         var accNs = 0L
+        var frameElapsedNs = 0L
         val timer = object : AnimationTimer() {
             override fun handle(now: Long) {
                 if (!playing || seqFrames.isEmpty()) return
                 if (accNs == 0L) {
                     accNs = now
+                    frameElapsedNs = 0L
+                    applyPose(fullUi = false)
                     return
                 }
-                val delayNs = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1) * 20_000_000L
-                if (now - accNs < delayNs) return
-                accNs += delayNs
-                if (now - accNs > delayNs * 4) accNs = now
-                val next = (currentFrame + 1) % seqFrames.size
-                frameSlider.value = next.toDouble()
+                val delayTicks = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
+                val delayNs = delayTicks * 20_000_000L
+                frameElapsedNs = now - accNs
+                if (frameElapsedNs >= delayNs) {
+                    accNs += delayNs
+                    if (now - accNs > delayNs * 4) accNs = now
+                    frameElapsedNs = (now - accNs).coerceAtLeast(0L)
+                    val next = (currentFrame + 1) % seqFrames.size
+                    frameSlider.value = next.toDouble()
+                } else {
+                    applyPose(fullUi = false)
+                }
             }
         }
         fun togglePlay() {
