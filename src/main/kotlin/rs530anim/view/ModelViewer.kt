@@ -899,6 +899,7 @@ class ModelViewer : Application() {
                 seqId = seqIdLoaded,
                 baseId = seqFrames.first().base.id,
                 labels = labels,
+                selectedLabel = selectedLabel(),
                 frames = seqFrames,
                 delays = seqDelays,
             ) { patches ->

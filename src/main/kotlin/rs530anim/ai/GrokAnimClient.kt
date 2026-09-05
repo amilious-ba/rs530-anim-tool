@@ -25,6 +25,7 @@ object GrokAnimClient {
         seqId: Int?,
         baseId: Int?,
         labels: List<Int>,
+        selectedLabel: Int?,
         frames: List<AnimFrame>,
         delays: IntArray,
     ): String {
@@ -32,7 +33,9 @@ object GrokAnimClient {
         sb.append("seq=").append(seqId ?: -1)
         sb.append(" base=").append(baseId ?: -1)
         sb.append(" labels=").append(labels.joinToString(","))
+        sb.append(" selected=").append(selectedLabel ?: labels.firstOrNull() ?: 0)
         sb.append(" frameCount=").append(frames.size).append('\n')
+        sb.append("Y is down in this client. Raising a group means more negative translate y.\n")
         frames.forEachIndexed { i, frame ->
             val ticks = delays.getOrElse(i) { 5 }
             sb.append("frame ").append(i).append(" delay=").append(ticks)
@@ -57,7 +60,7 @@ object GrokAnimClient {
         val body = StringBuilder()
         body.append('{')
         body.append("\"model\":\"").append(escape(model)).append("\",")
-        body.append("\"temperature\":0.2,")
+        body.append("\"temperature\":0.4,")
         body.append("\"messages\":[")
         body.append("{\"role\":\"system\",\"content\":\"").append(escape(system)).append("\"},")
         body.append("{\"role\":\"user\",\"content\":\"").append(escape(user)).append("\"}")
@@ -151,12 +154,14 @@ object GrokAnimClient {
     }
 
     val systemPrompt: String = """
-        You edit RuneScape revision 530 label animations (vskin groups).
-        Do not invent bones or a new file format.
-        Rotate values are 0..2047 (2048 = 360 degrees). Translate is signed. Scale default is 128.
-        Only change labels listed in the user message. Keep the same frame count.
-        Reply with JSON only:
-        {"patches":[{"frame":0,"label":1,"type":"rotate","x":24,"y":0,"z":0,"delay":6}]}
-        type must be translate, rotate, or scale. Omit unchanged tracks.
+        You edit RuneScape revision 530 vskin animation tracks.
+        Never return an empty patches array. Always output concrete numbers.
+        Use only labels listed in the clip. Keep the same frame count.
+        Rotate is 0..2047 (2048 = 360 degrees). Translate is signed. Scale default 128.
+        RS Y is down: raise = negative translate y (about -30 to -80).
+        If the user says "selected group", use the selected= label from the clip header.
+        JSON only, no markdown:
+        {"patches":[{"frame":2,"label":1,"type":"translate","x":0,"y":-48,"z":0},{"frame":3,"label":1,"type":"translate","x":0,"y":-40,"z":0},{"frame":4,"label":1,"type":"translate","x":0,"y":0,"z":0}]}
+        type must be translate, rotate, or scale.
     """.trimIndent()
 }

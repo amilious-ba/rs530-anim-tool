@@ -33,6 +33,7 @@ object GrokDialog {
         seqId: Int?,
         baseId: Int?,
         labels: List<Int>,
+        selectedLabel: Int?,
         frames: List<AnimFrame>,
         delays: IntArray,
         apply: (List<TrackPatch>) -> Unit,
@@ -60,8 +61,8 @@ object GrokDialog {
             if (prompt.isEmpty()) return@setOnAction
             generate.isDisable = true
             status.text = "calling Grok…"
-            val snapshot = GrokAnimClient.describeSequence(seqId, baseId, labels, frames, delays)
-            val user = "Current clip:\n$snapshot\n\nUser request:\n$prompt"
+            val snapshot = GrokAnimClient.describeSequence(seqId, baseId, labels, selectedLabel, frames, delays)
+            val user = "Current clip:\n$snapshot\n\nUser request:\n$prompt\n\nReturn at least one patch. selected label=${selectedLabel ?: labels.firstOrNull() ?: 0}."
             Thread {
                 try {
                     val raw = GrokAnimClient.complete(key, GrokSettings.model(), GrokAnimClient.systemPrompt, user)
