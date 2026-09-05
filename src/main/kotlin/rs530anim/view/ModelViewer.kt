@@ -23,7 +23,6 @@ import javafx.scene.control.Label
 import javafx.scene.control.Menu
 import javafx.scene.control.MenuBar
 import javafx.scene.control.MenuItem
-import javafx.scene.DepthTest
 import javafx.scene.Node
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.SeparatorMenuItem
@@ -635,9 +634,9 @@ class ModelViewer : Application() {
         timeline.setEnabled(seqFrames.isNotEmpty())
         timeline.setPlaying(false)
 
-        timeline.root.minHeight = 200.0
-        timeline.root.prefHeight = 220.0
-        timeline.root.maxHeight = 260.0
+        timeline.root.minHeight = 180.0
+        timeline.root.prefHeight = 230.0
+        timeline.root.maxHeight = 230.0
 
         val exportItem = MenuItem("Export extras…")
         exportItem.setOnAction { exportBtn.fire() }
@@ -732,8 +731,8 @@ class ModelViewer : Application() {
         pane.top = menuBar
         pane.center = work
         pane.bottom = statusBar
-        sub.widthProperty().bind(work.widthProperty().subtract(sideScroll.widthProperty()))
-        sub.heightProperty().bind(work.heightProperty().subtract(220))
+        sub.widthProperty().bind(stack.widthProperty())
+        sub.heightProperty().bind(stack.heightProperty())
 
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
@@ -747,6 +746,12 @@ class ModelViewer : Application() {
         }
         if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
         applyPose()
+        stage.maximizedProperty().addListener { _, _, _ ->
+            Platform.runLater {
+                pane.requestLayout()
+                stack.requestLayout()
+            }
+        }
         stage.show()
         val scanBase = seqFrames.firstOrNull()?.base?.id
         if (scanBase != null) {
@@ -861,7 +866,7 @@ private fun vskinGlow(model: Rs2Model, label: Int?): List<Node> {
         if (i in used) {
             val len = kotlin.math.sqrt(nx[i] * nx[i] + ny[i] * ny[i] + nz[i] * nz[i])
             if (len > 1e-4f) {
-                val s = 2.2f / len
+                val s = 1.1f / len
                 x += nx[i] * s
                 y += ny[i] * s
                 z += nz[i] * s
@@ -886,9 +891,8 @@ private fun vskinGlow(model: Rs2Model, label: Int?): List<Node> {
     val line = MeshView(mesh).apply {
         cullFace = CullFace.NONE
         drawMode = DrawMode.LINE
-        depthTest = DepthTest.DISABLE
         isMouseTransparent = true
-        material = PhongMaterial(Color.web("#f4d35e"))
+        material = PhongMaterial(Color.web("#c9b25a"))
     }
     return listOf(line)
 }
