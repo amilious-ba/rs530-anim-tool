@@ -460,24 +460,7 @@ class ModelViewer : Application() {
 
         val seqBox = ComboBox<NpcCatalog.SeqRef>()
         seqBox.prefWidth = 220.0
-        seqBox.isEditable = true
-        val seqChoices = linkedMapOf<Int, NpcCatalog.SeqRef>()
-        for (r in NpcCatalog.sequencesForModels(modelIds)) seqChoices[r.id] = r
-        val scanBase = seqFrames.firstOrNull()?.base?.id
-        if (scanBase != null) {
-            try {
-                Js5Store(settings).use { store ->
-                    val found = AnimLibrary.seqsUsingBase(store, scanBase)
-                    println("seqs on base $scanBase: ${found.size}  ${found.take(24)}")
-                    for (id in found) {
-                        seqChoices.putIfAbsent(id, NpcCatalog.SeqRef(id, "base $scanBase"))
-                    }
-                }
-            } catch (e: Exception) {
-                System.err.println("seq scan skipped: ${e.message}")
-            }
-        }
-        seqBox.items.addAll(seqChoices.values)
+        seqBox.items.addAll(NpcCatalog.sequencesForModels(modelIds))
         val currentSeq = seqIdLoaded
         if (currentSeq != null) {
             val match = seqBox.items.firstOrNull { it.id == currentSeq }
@@ -490,9 +473,7 @@ class ModelViewer : Application() {
             }
         }
         seqBox.setOnAction {
-            val typed = seqBox.editor.text.trim().substringBefore(' ').toIntOrNull()
-            val ref = seqBox.selectionModel.selectedItem
-            val id = ref?.id ?: typed ?: return@setOnAction
+            val id = seqBox.selectionModel.selectedItem?.id ?: return@setOnAction
             if (id == seqIdLoaded) return@setOnAction
             if (playing) togglePlay()
             if (!loadSequence(id)) return@setOnAction
@@ -531,7 +512,6 @@ class ModelViewer : Application() {
         texBox.setOnAction {
             selectedTex = texBox.selectionModel.selectedItem?.id
             rebuild()
-            applyPose()
         }
 
         val side = VBox(
@@ -751,6 +731,30 @@ class ModelViewer : Application() {
         if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
         applyPose()
         stage.show()
+        val scanBase = seqFrames.firstOrNull()?.base?.id
+        if (scanBase != null) {
+            Thread {
+                try {
+                    Js5Store(settings).use { store ->
+                        val found = AnimLibrary.seqsUsingBase(store, scanBase)
+                        println("seqs on base $scanBase: ${found.size}  ${found.take(24)}")
+                        Platform.runLater {
+                            for (id in found) {
+                                if (seqBox.items.none { it.id == id }) {
+                                    seqBox.items += NpcCatalog.SeqRef(id, "base $scanBase")
+                                }
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    System.err.println("seq scan skipped: ${e.message}")
+                }
+            }.apply {
+                isDaemon = true
+                name = "seq-scan"
+                start()
+            }
+        }
     }
 
     companion object {
