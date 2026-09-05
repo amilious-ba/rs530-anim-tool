@@ -40,6 +40,7 @@ class TimelineBar(
     private val onNext: () -> Unit,
     private val onLast: () -> Unit,
     private val onEdit: (frame: Int, label: Int, type: Int, axis: Int, value: Int) -> Unit,
+    private val onDelay: (frame: Int, ticks: Int) -> Unit = { _, _ -> },
 ) {
     private var editor: TextField? = null
     private val expanded = mutableSetOf<Int>()
@@ -225,7 +226,10 @@ class TimelineBar(
         list.forEachIndexed { i, _ ->
             val ticks = delays.getOrElse(i) { 5 }
             val cell = headerCell("f$i  ${ticks}t", AXIS_W * 3, playhead = i == cur, header = true)
-            cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
+            Tooltip.install(cell, Tooltip("click seek · double-click edit ticks"))
+            cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { e ->
+                if (e.clickCount >= 2) beginDelayEdit(cell, i, ticks) else onSeek(i)
+            }
             head.add(cell, colOf(i, 0), 0, 3, 1)
         }
     }
@@ -365,6 +369,34 @@ class TimelineBar(
                 val hi = if (type == TransformType.ROTATE) 2047 else 2047
                 onEdit(frame, label, type, axis, parsed.coerceIn(lo, hi))
             }
+        }
+        fun cancel() {
+            if (editor !== field) return
+            editor = null
+            cell.children.remove(field)
+        }
+        field.setOnAction { commit() }
+        field.focusedProperty().addListener { _, _, focus -> if (!focus) commit() }
+        field.setOnKeyPressed { e -> if (e.code == KeyCode.ESCAPE) cancel() }
+    }
+
+    private fun beginDelayEdit(cell: StackPane, frame: Int, ticks: Int) {
+        if (editor != null) return
+        val field = TextField(ticks.toString()).apply {
+            prefWidth = AXIS_W * 3
+            prefHeight = ROW_H
+            style = "-fx-font-size: 10px; -fx-background-color: #111; -fx-text-fill: #ffe08a; -fx-padding: 0 2 0 2;"
+        }
+        editor = field
+        cell.children.add(field)
+        field.requestFocus()
+        field.selectAll()
+        fun commit() {
+            if (editor !== field) return
+            editor = null
+            val parsed = field.text.trim().toIntOrNull()
+            cell.children.remove(field)
+            if (parsed != null && parsed != ticks) onDelay(frame, parsed.coerceIn(1, 255))
         }
         fun cancel() {
             if (editor !== field) return

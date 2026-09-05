@@ -164,6 +164,8 @@ class ModelViewer : Application() {
         val highlight = Group()
         highlight.isMouseTransparent = true
         world.children += highlight
+        val gizmo = TransformGizmo()
+        world.children += gizmo.root
         val meshGroup = Group()
         meshGroup.children.addAll(buildMeshes(model, materials))
         world.children.add(0, meshGroup)
@@ -200,6 +202,31 @@ class ModelViewer : Application() {
             highlight.children.setAll(vskinGlow(model, label))
         }
 
+        fun labelCenter(label: Int?): Triple<Double, Double, Double>? {
+            if (label == null || label !in model.boneVertices.indices) return null
+            val ids = model.boneVertices[label]
+            if (ids.isEmpty()) return null
+            var x = 0.0; var y = 0.0; var z = 0.0
+            for (i in ids) {
+                x += model.verticesX[i]
+                y += model.verticesY[i]
+                z += model.verticesZ[i]
+            }
+            val n = ids.size.toDouble()
+            return Triple(x / n, y / n, z / n)
+        }
+
+        fun refreshGizmo() {
+            val lab = selectedLabel()
+            val c = labelCenter(lab)
+            if (c == null) {
+                gizmo.root.isVisible = false
+                return
+            }
+            gizmo.root.isVisible = true
+            gizmo.rebuild(editType(), c.first, c.second, c.third, fitDistance(model) * 0.08)
+        }
+
         fun syncDeformedGeometry() {
             var p = 0
             for (i in 0 until model.vertexCount) {
@@ -233,6 +260,7 @@ class ModelViewer : Application() {
             }
             meshGroup.children.forEach { pushPoints(it) }
             showLabel(selectedLabel())
+            refreshGizmo()
         }
 
         var showTextures = true
@@ -549,23 +577,50 @@ class ModelViewer : Application() {
         var lastX = 0.0
         var lastY = 0.0
         var dragDist = 0.0
+        var gizmoDrag = false
         sub.setOnMousePressed { e ->
             lastX = e.sceneX
             lastY = e.sceneY
             dragDist = 0.0
+            gizmoDrag = e.button == MouseButton.PRIMARY && gizmo.begin(e.pickResult?.intersectedNode)
         }
         sub.setOnMouseDragged { e ->
-            if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
-                val dx = e.sceneX - lastX
-                val dy = e.sceneY - lastY
-                dragDist += kotlin.math.abs(dx) + kotlin.math.abs(dy)
+            val dx = e.sceneX - lastX
+            val dy = e.sceneY - lastY
+            dragDist += kotlin.math.abs(dx) + kotlin.math.abs(dy)
+            if (gizmoDrag && gizmo.axis != null && seqFrames.isNotEmpty()) {
+                val lab = selectedLabel()
+                val axis = gizmo.axis
+                if (lab != null && axis != null) {
+                    val type = editType()
+                    val frame = seqFrames[currentFrame]
+                    val def = if (type == TransformType.SCALE) 128 else 0
+                    val cur = frame.valuesForLabel(lab, type) ?: Triple(def, def, def)
+                    val parts = intArrayOf(cur.first, cur.second, cur.third)
+                    val step = if (type == TransformType.ROTATE) 4 else 1
+                    val delta = ((dx - dy) * 0.35).toInt()
+                    val lo = if (type == TransformType.ROTATE) 0 else -2047
+                    val hi = 2047
+                    parts[axis] = (parts[axis] + delta * step).coerceIn(lo, hi)
+                    seqFrames[currentFrame] = frame.withLabelValues(lab, type, parts[0], parts[1], parts[2])
+                    loadSlidersFromFrame()
+                    applyPose(fullUi = false)
+                }
+            } else if (e.button == MouseButton.PRIMARY || e.button == MouseButton.SECONDARY) {
                 yaw.angle += dx * 0.4
                 pitch.angle += dy * 0.4
-                lastX = e.sceneX
-                lastY = e.sceneY
             }
+            lastX = e.sceneX
+            lastY = e.sceneY
         }
         sub.setOnMouseReleased { e ->
+            val wasGizmo = gizmoDrag
+            gizmo.end()
+            gizmoDrag = false
+            if (wasGizmo) {
+                applyPose(fullUi = true)
+                return@setOnMouseReleased
+            }
             if (e.button != MouseButton.PRIMARY || dragDist > 5.0) return@setOnMouseReleased
             val pick = e.pickResult ?: return@setOnMouseReleased
             val node = pick.intersectedNode as? MeshView ?: return@setOnMouseReleased
@@ -609,6 +664,13 @@ class ModelViewer : Application() {
             onPrev = { seekFrame(currentFrame - 1) },
             onNext = { seekFrame(currentFrame + 1) },
             onLast = { seekFrame(seqFrames.lastIndex) },
+            onDelay = { frame, ticks ->
+                if (frame in seqDelays.indices) {
+                    seqDelays[frame] = ticks
+                    refreshTimeline()
+                    applyPose(fullUi = true)
+                }
+            },
             onEdit = { frame, lab, type, axis, value ->
                 if (frame in seqFrames.indices) {
                     val src = seqFrames[frame]
@@ -713,7 +775,7 @@ class ModelViewer : Application() {
 
         val helpMenu = Menu("Help", null, aboutItem)
         val menuBar = MenuBar(fileMenu, viewMenu, playMenu, helpMenu)
-        timeline.setTools(texToggle, wireToggle, vertToggle)
+        timeline.setTools(moveBtn, rotBtn, texToggle, wireToggle, vertToggle)
 
         val statusText = Label("ready").apply { textFill = Color.rgb(200, 200, 206) }
         windowStatus = { statusText.text = it }
@@ -731,8 +793,18 @@ class ModelViewer : Application() {
         pane.top = menuBar
         pane.center = work
         pane.bottom = statusBar
-        sub.widthProperty().bind(stack.widthProperty())
-        sub.heightProperty().bind(stack.heightProperty())
+        fun fitSub() {
+            val w = stack.width
+            val h = stack.height
+            if (w > 2 && h > 2) {
+                sub.width = w
+                sub.height = h
+            }
+        }
+        stack.widthProperty().addListener { _, _, _ -> fitSub() }
+        stack.heightProperty().addListener { _, _, _ -> fitSub() }
+        stage.widthProperty().addListener { _, _, _ -> Platform.runLater { fitSub() } }
+        stage.heightProperty().addListener { _, _, _ -> Platform.runLater { fitSub() } }
 
         val title = buildString {
             append("rs530-anim-tool  model ${modelIds.joinToString("+")}")

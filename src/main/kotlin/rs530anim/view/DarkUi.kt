@@ -1,9 +1,8 @@
 package rs530anim.view
 
-import javafx.geometry.Pos
+import javafx.scene.Group
 import javafx.scene.control.Button
 import javafx.scene.control.Tooltip
-import javafx.scene.layout.StackPane
 import javafx.scene.paint.Color
 import javafx.scene.shape.Polygon
 import javafx.scene.shape.Rectangle
@@ -22,50 +21,44 @@ object DarkUi {
         }
 
     fun playGraphic(): javafx.scene.Node {
-        val tri = Polygon(4.0, 2.0, 16.0, 10.0, 4.0, 18.0)
+        val tri = Polygon(5.0, 2.0, 16.0, 10.0, 5.0, 18.0)
         tri.fill = ink
-        return StackPane(tri).apply { prefWidth = 18.0; prefHeight = 20.0 }
+        return Group(tri)
     }
 
     fun pauseGraphic(): javafx.scene.Node {
-        val a = Rectangle(4.0, 3.0, 4.0, 14.0)
-        val b = Rectangle(11.0, 3.0, 4.0, 14.0)
+        val a = Rectangle(4.0, 2.0, 4.0, 16.0)
+        val b = Rectangle(11.0, 2.0, 4.0, 16.0)
         a.fill = ink
         b.fill = ink
-        return StackPane(a, b).apply {
-            prefWidth = 18.0
-            prefHeight = 20.0
-            alignment = Pos.CENTER
-        }
+        return Group(a, b)
     }
 
-    fun prevGraphic(): javafx.scene.Node = skipGraphic(endRight = false)
+    fun prevGraphic(): javafx.scene.Node {
+        val tri = Polygon(15.0, 2.0, 4.0, 10.0, 15.0, 18.0)
+        tri.fill = ink
+        return Group(tri)
+    }
 
-    fun nextGraphic(): javafx.scene.Node = skipGraphic(endRight = true)
+    fun nextGraphic(): javafx.scene.Node {
+        val tri = Polygon(4.0, 2.0, 15.0, 10.0, 4.0, 18.0)
+        tri.fill = ink
+        return Group(tri)
+    }
 
     fun firstGraphic(): javafx.scene.Node {
-        val bar = Rectangle(2.0, 3.0, 3.0, 14.0)
+        val bar = Rectangle(2.0, 2.0, 3.0, 16.0)
         bar.fill = ink
-        val tri = Polygon(16.0, 3.0, 6.0, 10.0, 16.0, 17.0)
+        val tri = Polygon(16.0, 2.0, 6.0, 10.0, 16.0, 18.0)
         tri.fill = ink
-        return StackPane(bar, tri).apply { prefWidth = 18.0; prefHeight = 20.0 }
+        return Group(bar, tri)
     }
 
     fun lastGraphic(): javafx.scene.Node {
-        val bar = Rectangle(13.0, 3.0, 3.0, 14.0)
+        val tri = Polygon(2.0, 2.0, 12.0, 10.0, 2.0, 18.0)
+        tri.fill = ink
+        val bar = Rectangle(13.0, 2.0, 3.0, 16.0)
         bar.fill = ink
-        val tri = Polygon(2.0, 3.0, 12.0, 10.0, 2.0, 17.0)
-        tri.fill = ink
-        return StackPane(bar, tri).apply { prefWidth = 18.0; prefHeight = 20.0 }
-    }
-
-    private fun skipGraphic(endRight: Boolean): javafx.scene.Node {
-        val tri = if (endRight) {
-            Polygon(3.0, 3.0, 13.0, 10.0, 3.0, 17.0)
-        } else {
-            Polygon(15.0, 3.0, 5.0, 10.0, 15.0, 17.0)
-        }
-        tri.fill = ink
-        return StackPane(tri).apply { prefWidth = 18.0; prefHeight = 20.0 }
+        return Group(tri, bar)
     }
 }
