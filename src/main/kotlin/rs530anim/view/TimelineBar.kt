@@ -70,11 +70,11 @@ class TimelineBar(
         style = PANE
     }
 
-    private val firstBtn = Button("|<<").apply { setOnAction { onFirst() } }
-    private val prevBtn = Button("<").apply { setOnAction { onPrev() } }
-    val playBtn = Button("Play").apply { setOnAction { onPlayToggle() } }
-    private val nextBtn = Button(">").apply { setOnAction { onNext() } }
-    private val lastBtn = Button(">>|").apply { setOnAction { onLast() } }
+    private val firstBtn = DarkUi.iconButton("First frame", DarkUi.firstGraphic()) { onFirst() }
+    private val prevBtn = DarkUi.iconButton("Previous frame", DarkUi.prevGraphic()) { onPrev() }
+    val playBtn = DarkUi.iconButton("Play / Pause", DarkUi.playGraphic()) { onPlayToggle() }
+    private val nextBtn = DarkUi.iconButton("Next frame", DarkUi.nextGraphic()) { onNext() }
+    private val lastBtn = DarkUi.iconButton("Last frame", DarkUi.lastGraphic()) { onLast() }
     val status = Label()
     private val transport = HBox(6.0).apply {
         alignment = Pos.CENTER_LEFT
@@ -137,7 +137,8 @@ class TimelineBar(
     }
 
     fun setPlaying(playing: Boolean) {
-        playBtn.text = if (playing) "Pause" else "Play"
+        playBtn.graphic = if (playing) DarkUi.pauseGraphic() else DarkUi.playGraphic()
+        playBtn.tooltip = javafx.scene.control.Tooltip(if (playing) "Pause" else "Play")
     }
 
     fun setEnabled(on: Boolean) {

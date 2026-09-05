@@ -1,0 +1,69 @@
+.root {
+    -fx-base: #1e1e22;
+    -fx-background: #1e1e22;
+    -fx-control-inner-background: #2a2a30;
+    -fx-accent: #7a8f3a;
+    -fx-focus-color: #7a8f3a;
+    -fx-faint-focus-color: transparent;
+    -fx-text-fill: #d8d8de;
+}
+.menu-bar {
+    -fx-background-color: #16161a;
+}
+.menu-bar .label {
+    -fx-text-fill: #d8d8de;
+}
+.menu-item .label {
+    -fx-text-fill: #d8d8de;
+}
+.context-menu {
+    -fx-background-color: #24242a;
+}
+.combo-box-base {
+    -fx-background-color: #2a2a30;
+    -fx-background-radius: 4;
+}
+.combo-box .list-cell {
+    -fx-text-fill: #d8d8de;
+    -fx-background-color: transparent;
+}
+.combo-box-popup .list-view {
+    -fx-background-color: #2a2a30;
+}
+.combo-box-popup .list-cell:filled:hover,
+.combo-box-popup .list-cell:filled:selected {
+    -fx-background-color: #3d4a2a;
+}
+.text-field {
+    -fx-background-color: #2a2a30;
+    -fx-text-fill: #d8d8de;
+    -fx-prompt-text-fill: #888;
+}
+.button {
+    -fx-background-color: #2e2e36;
+    -fx-text-fill: #d8d8de;
+    -fx-background-radius: 4;
+}
+.button:hover {
+    -fx-background-color: #3a3a44;
+}
+.toggle-button {
+    -fx-background-color: #2e2e36;
+    -fx-text-fill: #d8d8de;
+    -fx-background-radius: 4;
+}
+.toggle-button:selected {
+    -fx-background-color: #3d4a2a;
+    -fx-text-fill: #e8f0c8;
+}
+.scroll-pane,
+.scroll-pane > .viewport {
+    -fx-background-color: #1e1e22;
+}
+.label {
+    -fx-text-fill: #d8d8de;
+}
+.tooltip {
+    -fx-background-color: #111;
+    -fx-text-fill: #eee;
+}

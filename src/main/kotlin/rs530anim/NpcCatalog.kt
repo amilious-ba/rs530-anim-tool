@@ -10,6 +10,7 @@ data class NpcRow(
     val models: List<Int>,
 ) {
     fun seqIds(): List<Int> = listOf(attack, block, death, range).filter { it > 0 }.distinct()
+    override fun toString(): String = "$id  $name"
 }
 
 object NpcCatalog {

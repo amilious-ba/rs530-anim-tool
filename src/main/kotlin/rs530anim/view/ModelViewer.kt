@@ -458,6 +458,22 @@ class ModelViewer : Application() {
             frameSlider.value = i.coerceIn(0, seqFrames.lastIndex).toDouble()
         }
 
+        val modelBox = ComboBox<NpcCatalog.NpcRow>()
+        modelBox.prefWidth = 220.0
+        val pinned = listOf(132, 4344, 1455, 1456, 1457, 1465, 1466, 1467)
+        modelBox.items.addAll(pinned.mapNotNull { NpcCatalog.get(it) }.distinctBy { it.id })
+        val currentNpc = NpcCatalog.all.firstOrNull { NpcCatalog.modelsFor(it.id) == modelIds }
+            ?: NpcCatalog.get(132)
+        if (currentNpc != null) modelBox.selectionModel.select(currentNpc)
+        modelBox.setOnAction {
+            val row = modelBox.selectionModel.selectedItem ?: return@setOnAction
+            val nextModels = NpcCatalog.modelsFor(row.id)
+            if (nextModels == modelIds) return@setOnAction
+            val atk = row.attack.takeIf { it > 0 }
+            stage.close()
+            openWindow(listOf(nextModels.joinToString("+")) + listOfNotNull(atk?.toString()))
+        }
+
         val seqBox = ComboBox<NpcCatalog.SeqRef>()
         seqBox.prefWidth = 220.0
         seqBox.items.addAll(NpcCatalog.sequencesForModels(modelIds))
@@ -515,31 +531,32 @@ class ModelViewer : Application() {
         }
 
         val side = VBox(
-            6.0,
-            Label("${model.vertexCount} verts  ${model.faceCount} faces"),
-            pickedLabelUi,
-            Label("animation"),
-            seqBox,
+            8.0,
+            Label("model"),
+            modelBox,
             Label("texture"),
             texBox,
-            Label("extras seq id"),
+            Label("animation"),
+            seqBox,
+            pickedLabelUi,
+            Label("${model.vertexCount} verts  ${model.faceCount} faces"),
             extrasIdField,
             exportBtn,
             importBtn,
             extrasLabel,
-            Label("double-click a timeline cell to edit x/y/z"),
             xyzLabel,
         )
-        side.padding = Insets(8.0)
+        side.padding = Insets(10.0)
         side.prefWidth = 236.0
         side.minWidth = 236.0
+        side.style = "-fx-background-color: #1e1e22;"
         val sideScroll = ScrollPane(side).apply {
             isFitToWidth = true
             hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
             vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
             prefWidth = 248.0
             minWidth = 248.0
-            style = "-fx-background-color: #f4f4f4;"
+            style = "-fx-background-color: #1e1e22; -fx-background: #1e1e22;"
         }
 
         val sub = SubScene(root, 960.0, 720.0, true, SceneAntialiasing.BALANCED)
@@ -715,11 +732,11 @@ class ModelViewer : Application() {
         val menuBar = MenuBar(fileMenu, viewMenu, playMenu, helpMenu)
         timeline.setTools(texToggle, wireToggle, vertToggle)
 
-        val statusText = Label("ready").apply { textFill = Color.rgb(40, 40, 44) }
+        val statusText = Label("ready").apply { textFill = Color.rgb(200, 200, 206) }
         windowStatus = { statusText.text = it }
         val statusBar = HBox(statusText).apply {
-            padding = Insets(3.0, 8.0, 3.0, 8.0)
-            style = "-fx-background-color: #e8e8ea; -fx-border-color: #c8c8cc; -fx-border-width: 1 0 0 0;"
+            padding = Insets(4.0, 8.0, 4.0, 8.0)
+            style = "-fx-background-color: #16161a;"
         }
         HBox.setHgrow(statusText, Priority.ALWAYS)
 
@@ -739,7 +756,11 @@ class ModelViewer : Application() {
             if (seqId != null) append("  seq $seqId")
         }
         stage.title = title
-        stage.scene = Scene(pane, 1180.0, 760.0)
+        stage.scene = Scene(pane, 1180.0, 760.0).also { sc ->
+            val css = ModelViewer::class.java.getResource("/rs530anim/dark.css")
+            if (css != null) sc.stylesheets += css.toExternalForm()
+            sc.fill = Color.rgb(30, 30, 34)
+        }
         if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
         applyPose()
         stage.show()
