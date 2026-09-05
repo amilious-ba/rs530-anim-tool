@@ -256,8 +256,9 @@ class ModelViewer : Application() {
         var showWire = false
         var showVerts = false
         var playing = false
+        var selectedTex: Int? = null
         fun rebuild() {
-            val nodes = buildMeshes(model, materials, showTextures, showWire).toMutableList<Node>()
+            val nodes = buildMeshes(model, materials, showTextures, showWire, selectedTex).toMutableList<Node>()
             if (showVerts) nodes += vertexDots(model)
             meshGroup.children.setAll(nodes)
             highlightLabel = null
@@ -504,12 +505,43 @@ class ModelViewer : Application() {
             applyPose(fullUi = true)
         }
 
+        data class TexRef(val id: Int?, val label: String) {
+            override fun toString(): String = label
+        }
+        val texCounts = linkedMapOf<Int, Int>()
+        val rawTex = model.faceTextures
+        if (rawTex != null) {
+            for (i in rawTex.indices) {
+                val id = rawTex[i].toInt() and 0xFFFF
+                if (id != 0xFFFF) texCounts[id] = (texCounts[id] ?: 0) + 1
+            }
+        }
+        val texBox = ComboBox<TexRef>()
+        texBox.prefWidth = 220.0
+        texBox.items += TexRef(null, "all textures  (${texCounts.values.sum()} faces)")
+        for ((id, n) in texCounts.entries.sortedBy { it.key }) {
+            val graph = rs530anim.tex.TextureLibrary.image(id) != null
+            val hsl = materials?.solidHsl(id)
+            texBox.items += TexRef(
+                id,
+                "$id  $n faces  ${if (graph) "graph" else "solid"}" + if (hsl != null) "  hsl $hsl" else "",
+            )
+        }
+        texBox.selectionModel.selectFirst()
+        texBox.setOnAction {
+            selectedTex = texBox.selectionModel.selectedItem?.id
+            rebuild()
+            applyPose()
+        }
+
         val side = VBox(
             6.0,
             Label("${model.vertexCount} verts  ${model.faceCount} faces"),
             pickedLabelUi,
             Label("animation"),
             seqBox,
+            Label("texture"),
+            texBox,
             Label("extras seq id"),
             extrasIdField,
             exportBtn,
@@ -772,6 +804,7 @@ private fun buildMeshes(
     materials: TextureMaterials?,
     textures: Boolean = true,
     wire: Boolean = false,
+    highlightTex: Int? = null,
 ): List<Node> {
     data class Tri(val face: Int, val a: Int, val b: Int, val c: Int, val color: Int, val tex: Int)
     val minX = (model.verticesX.minOrNull() ?: 0).toFloat()
@@ -847,6 +880,7 @@ private fun buildMeshes(
         view.cullFace = CullFace.NONE
         view.drawMode = DrawMode.FILL
         val hsl = group.first().color
+        val dim = highlightTex != null && tex != highlightTex
         view.material = PhongMaterial(Hsl.toFx(hsl)).apply {
             specularColor = Color.BLACK
             specularPower = 1.0
@@ -856,6 +890,10 @@ private fun buildMeshes(
                     diffuseMap = img
                     diffuseColor = Hsl.toFx(hsl)
                 }
+            }
+            if (dim) {
+                diffuseColor = (diffuseColor ?: Color.GRAY).deriveColor(0.0, 0.4, 0.35, 1.0)
+                diffuseMap = null
             }
         }
         val nodes = mutableListOf<Node>(view)
