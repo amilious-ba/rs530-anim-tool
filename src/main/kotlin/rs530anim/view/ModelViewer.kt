@@ -890,7 +890,31 @@ class ModelViewer : Application() {
         redoItem.setOnAction { redoEdit() }
         val resetItem = MenuItem("Reset sequence")
         resetItem.setOnAction { resetEdits() }
-        val editMenu = Menu("Edit", null, undoItem, redoItem, SeparatorMenuItem(), resetItem)
+        val grokKeyItem = MenuItem("Grok API key…")
+        grokKeyItem.setOnAction { GrokDialog.askKey() }
+        val grokItem = MenuItem("Generate with Grok…")
+        grokItem.setOnAction {
+            if (seqFrames.isEmpty()) return@setOnAction
+            GrokDialog.promptAndGenerate(
+                seqId = seqIdLoaded,
+                baseId = seqFrames.first().base.id,
+                labels = labels,
+                frames = seqFrames,
+                delays = seqDelays,
+            ) { patches ->
+                pushHist()
+                for (p in patches) {
+                    if (p.frame !in seqFrames.indices) continue
+                    seqFrames[p.frame] = seqFrames[p.frame].withLabelValues(p.label, p.type, p.x, p.y, p.z)
+                    if (p.delay != null && p.frame in seqDelays.indices) {
+                        seqDelays[p.frame] = p.delay.coerceIn(1, 255)
+                    }
+                }
+                loadSlidersFromFrame()
+                applyPose(fullUi = true)
+            }
+        }
+        val editMenu = Menu("Edit", null, undoItem, redoItem, SeparatorMenuItem(), resetItem, SeparatorMenuItem(), grokItem, grokKeyItem)
 
         val playItem = MenuItem("Play / Pause")
         playItem.setOnAction { togglePlay() }

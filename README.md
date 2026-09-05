@@ -280,3 +280,12 @@ play 220 / 223 / 1392. No cache pack required if the client extras hook is in.
 - Labels on model 132 stay as dumped so stock anims still bind.
 - Windows. IntelliJ / Rider. Kotlin.
 - One compiling slice per message.
+
+---
+
+## Grok generate
+
+Edit → Generate with Grok. Key from https://console.x.ai — paste via
+Edit → Grok API key, or set `XAI_API_KEY`. Optional `XAI_MODEL` (default
+`grok-4.3`). The key is written to `%USERPROFILE%\.rs530-anim-tool\xai.key`
+and is not committed.
