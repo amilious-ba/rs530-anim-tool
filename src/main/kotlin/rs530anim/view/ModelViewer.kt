@@ -405,11 +405,14 @@ class ModelViewer : Application() {
             val lab = selectedLabel()
             val typeName = TransformType.nameOf(editType())
             val baseId = seqFrames.firstOrNull()?.base?.id
+            val posedMinY = model.verticesY.minOrNull() ?: 0
+            val posedMaxY = model.verticesY.maxOrNull() ?: 0
             windowStatus(
                 "model ${modelIds.joinToString("+")}   " +
                     statusText +
                     "   " + (lab?.let { "vskin $it $typeName" } ?: "no group") +
-                    (baseId?.let { "   base $it" } ?: ""),
+                    (baseId?.let { "   base $it" } ?: "") +
+                    "   posedY $posedMinY..$posedMaxY  tile=0",
             )
             syncDeformedGeometry()
             if (fullUi) refreshTimeline() else markPlayhead(currentFrame)
