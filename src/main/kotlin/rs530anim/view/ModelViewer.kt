@@ -64,7 +64,7 @@ import kotlin.math.max
 
 class ModelViewer : Application() {
     override fun start(stage: Stage) {
-        val raw = parameters.raw.ifEmpty { bootArgs }
+        val raw = bootArgs.ifEmpty { parameters?.raw ?: emptyList() }
         val modelSpec = raw.getOrNull(0) ?: "3004"
         val modelIds = MonkeySkins.resolve(modelSpec)
         val seqId = raw.getOrNull(1)?.toIntOrNull()
@@ -468,8 +468,8 @@ class ModelViewer : Application() {
         if (currentNpc != null) modelBox.selectionModel.select(currentNpc)
         modelBox.setOnAction {
             val row = modelBox.selectionModel.selectedItem ?: return@setOnAction
+            if (row.id == currentNpc?.id) return@setOnAction
             val nextModels = NpcCatalog.modelsFor(row.id)
-            if (nextModels == modelIds) return@setOnAction
             val atk = row.attack.takeIf { it > 0 }
             stage.close()
             openWindow(listOf(nextModels.joinToString("+")) + listOfNotNull(atk?.toString()))
