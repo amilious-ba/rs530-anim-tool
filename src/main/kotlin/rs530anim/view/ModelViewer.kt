@@ -66,13 +66,13 @@ class ModelViewer : Application() {
     override fun start(stage: Stage) {
         val raw = bootArgs.ifEmpty { parameters?.raw ?: emptyList() }
         val modelSpec = raw.getOrNull(0) ?: "3004"
-        val modelIds = MonkeySkins.resolve(modelSpec)
+        var modelIds = MonkeySkins.resolve(modelSpec)
         val seqId = raw.getOrNull(1)?.toIntOrNull()
         val frameNo = raw.getOrNull(2)?.toIntOrNull() ?: 0
 
         val settings = CacheSettings.load(null)
         var materials: TextureMaterials? = null
-        val model = Js5Store(settings).use { store ->
+        var model = Js5Store(settings).use { store ->
             materials = try {
                 TextureMaterials.load().also { mat ->
                     println("texture 112 solid hsl=${mat.solidHsl(112)}  359=${mat.solidHsl(359)}")
@@ -136,8 +136,8 @@ class ModelViewer : Application() {
             }
         }
         centerModel(model)
-        val animator = ModelAnimator(model)
-        val bind = animator.copyBindPose()
+        var animator = ModelAnimator(model)
+        var bind = animator.copyBindPose()
         var currentFrame = frameNo.coerceIn(0, (seqFrames.size - 1).coerceAtLeast(0))
 
         val world = Group()
@@ -147,7 +147,7 @@ class ModelViewer : Application() {
             translateY = -120.0
             translateZ = -80.0
         }
-        world.children += groundMarker(model)
+        world.children += groundMarker(model).also { it.userData = "ground" }
 
         val yaw = Rotate(30.0, Rotate.Y_AXIS)
         val pitch = Rotate(-20.0, Rotate.X_AXIS)
@@ -170,7 +170,7 @@ class ModelViewer : Application() {
         meshGroup.children.addAll(buildMeshes(model, materials))
         world.children.add(0, meshGroup)
 
-        val labels = model.uniqueVertexLabels()
+        var labels = model.uniqueVertexLabels()
         var pickedLabel: Int? = labels.firstOrNull()
         fun selectedLabel(): Int? = pickedLabel
         val pickedLabelUi = Label(
@@ -194,7 +194,7 @@ class ModelViewer : Application() {
         val sy = Slider(sliderMin(), sliderMax(), 0.0)
         val sz = Slider(sliderMin(), sliderMax(), 0.0)
         val xyzLabel = Label("dx 0  dy 0  dz 0")
-        val pointScratch = FloatArray(model.vertexCount * 3)
+        var pointScratch = FloatArray(model.vertexCount * 3)
 
         var highlightLabel: Int? = null
         fun showLabel(label: Int?) {
@@ -469,6 +469,7 @@ class ModelViewer : Application() {
             frameSlider.value = i.coerceIn(0, seqFrames.lastIndex).toDouble()
         }
 
+        var applyNpc: (Int) -> Unit = {}
         val modelBox = ComboBox<NpcRow>()
         modelBox.prefWidth = 220.0
         val pinned = listOf(132, 4344, 1455, 1456, 1457, 1465, 1466, 1467)
@@ -476,13 +477,11 @@ class ModelViewer : Application() {
         val currentNpc = NpcCatalog.all.firstOrNull { NpcCatalog.modelsFor(it.id) == modelIds }
             ?: NpcCatalog.get(132)
         if (currentNpc != null) modelBox.selectionModel.select(currentNpc)
+        var loadedNpcId = currentNpc?.id
         modelBox.setOnAction {
             val row = modelBox.selectionModel.selectedItem ?: return@setOnAction
-            if (row.id == currentNpc?.id) return@setOnAction
-            val nextModels = NpcCatalog.modelsFor(row.id)
-            val atk = row.attack.takeIf { it > 0 }
-            stage.close()
-            openWindow(listOf(nextModels.joinToString("+")) + listOfNotNull(atk?.toString()))
+            if (row.id == loadedNpcId) return@setOnAction
+            applyNpc(row.id)
         }
 
         val seqBox = ComboBox<NpcCatalog.SeqRef>()
@@ -539,6 +538,83 @@ class ModelViewer : Application() {
         texBox.setOnAction {
             selectedTex = texBox.selectionModel.selectedItem?.id
             rebuild()
+        }
+
+        applyNpc = apply@{ id ->
+            if (id == loadedNpcId) return@apply
+            val next = NpcCatalog.modelsFor(id)
+            try {
+                val loaded = Js5Store(settings).use { store ->
+                    var m = Rs2ModelLoader.decode(store.model(next.first()))
+                    for (mid in next.drop(1)) {
+                        m = m.attach(Rs2ModelLoader.decode(store.model(mid)))
+                    }
+                    println("npc $id models=${next.joinToString("+")} verts=${m.vertexCount} faces=${m.faceCount}")
+                    m
+                }
+                if (playing) togglePlay()
+                centerModel(loaded)
+                model = loaded
+                modelIds = next
+                loadedNpcId = id
+                animator = ModelAnimator(model)
+                bind = animator.copyBindPose()
+                labels = model.uniqueVertexLabels()
+                pointScratch = FloatArray(model.vertexCount * 3)
+                pickedLabel = labels.firstOrNull()
+                pickedLabelUi.text = pickedLabel?.let { "vskin $it  (${model.vertexCountForLabel(it)} verts)" } ?: "no vskin"
+                selectedTex = null
+                world.children.removeIf { it.userData == "ground" }
+                world.children += groundMarker(model).also { it.userData = "ground" }
+                val atk = NpcCatalog.get(id)?.attack?.takeIf { it > 0 }
+                if (atk != null) loadSequence(atk) else {
+                    seqFrames = mutableListOf()
+                    seqDelays = IntArray(0)
+                    seqIdLoaded = null
+                }
+                currentFrame = 0
+                frameSlider.max = (seqFrames.size - 1).coerceAtLeast(0).toDouble()
+                frameSlider.value = 0.0
+                extrasIdField.text = (seqIdLoaded ?: 9220).toString()
+                timelineEnabled(seqFrames.isNotEmpty())
+                exportBtn.isDisable = seqFrames.isEmpty()
+                texBox.items.clear()
+                val counts = linkedMapOf<Int, Int>()
+                model.faceTextures?.forEach { t ->
+                    val tid = t.toInt() and 0xFFFF
+                    if (tid != 0xFFFF) counts[tid] = (counts[tid] ?: 0) + 1
+                }
+                texBox.items += TexRef(null, "all textures  (${counts.values.sum()} faces)")
+                for ((tid, n) in counts.entries.sortedBy { it.key }) {
+                    val graph = rs530anim.tex.TextureLibrary.image(tid) != null
+                    texBox.items += TexRef(tid, "$tid  $n faces  ${if (graph) "graph" else "solid"}")
+                }
+                texBox.selectionModel.selectFirst()
+                seqBox.items.setAll(NpcCatalog.sequencesForModels(modelIds))
+                seqIdLoaded?.let { sid ->
+                    val match = seqBox.items.firstOrNull { it.id == sid }
+                    if (match != null) seqBox.selectionModel.select(match)
+                    else {
+                        val extra = NpcCatalog.SeqRef(sid, "loaded")
+                        seqBox.items.add(0, extra)
+                        seqBox.selectionModel.select(extra)
+                    }
+                }
+                val row = NpcCatalog.get(id)
+                if (row != null && modelBox.items.none { it.id == id }) modelBox.items.add(0, row)
+                if (row != null) modelBox.selectionModel.select(row)
+                distance = fitDistance(model)
+                camera.translateZ = -distance
+                rebuild()
+                applyPose(fullUi = true)
+                stage.title = buildString {
+                    append("rs530-anim-tool  model ${modelIds.joinToString("+")}")
+                    seqIdLoaded?.let { append("  seq $it") }
+                }
+            } catch (e: Exception) {
+                System.err.println("npc $id failed: ${e.message}")
+                e.printStackTrace()
+            }
         }
 
         val side = VBox(
@@ -710,11 +786,7 @@ class ModelViewer : Application() {
             dlg.title = "Open NPC"
             dlg.headerText = "Load an NPC by id. 132 is the default Monkey."
             val id = dlg.showAndWait().orElse(null)?.trim()?.toIntOrNull() ?: return@setOnAction
-            val row = NpcCatalog.get(id)
-            val models = NpcCatalog.modelsFor(id)
-            val atk = row?.attack?.takeIf { it > 0 }
-            stage.close()
-            openWindow(listOf(models.joinToString("+")) + listOfNotNull(atk?.toString()))
+            applyNpc(id)
         }
         val exitItem = MenuItem("Exit")
         exitItem.setOnAction { Platform.exit() }

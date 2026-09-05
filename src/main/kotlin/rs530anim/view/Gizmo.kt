@@ -34,11 +34,10 @@ class TransformGizmo {
     fun hitAxis(node: Node?): Int? {
         var n: Node? = node
         while (n != null) {
-            val data = n.userData as? String ?: run {
-                n = n.parent
-                continue
+            val data = n.userData as? String
+            if (data != null && data.startsWith("gizmo:")) {
+                return data.removePrefix("gizmo:").toIntOrNull()
             }
-            if (data.startsWith("gizmo:")) return data.removePrefix("gizmo:").toIntOrNull()
             n = n.parent
         }
         return null
