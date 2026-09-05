@@ -41,6 +41,7 @@ class TimelineBar(
     private val onEdit: (frame: Int, label: Int, type: Int, axis: Int, value: Int) -> Unit,
 ) {
     private var editor: TextField? = null
+    private val expanded = mutableSetOf<Int>()
     private val corner = GridPane()
     private val head = GridPane()
     private val names = GridPane()
@@ -165,17 +166,66 @@ class TimelineBar(
             return
         }
 
+        val base = list.first().base
+        if (selLab != null) expanded += selLab
+
         var row = 0
         for (lab in labs) {
-            names.rowConstraints += RowConstraints(ROW_H)
-            body.rowConstraints += RowConstraints(ROW_H)
-            trackRow(lab, TransformType.ROTATE, "vskin $lab  rot", list, cur, selLab, selType, row)
+            val types = typesForLabel(base, lab)
+            val primary = types.firstOrNull() ?: TransformType.TRANSLATE
+            val open = lab in expanded
+            addRow(row)
+            groupRow(lab, primary, types, open, list, cur, selLab, row)
             row++
-            names.rowConstraints += RowConstraints(ROW_H)
-            body.rowConstraints += RowConstraints(ROW_H)
-            trackRow(lab, TransformType.TRANSLATE, "vskin $lab  pos", list, cur, selLab, selType, row)
-            row++
+            if (open) {
+                for (type in types) {
+                    addRow(row)
+                    trackRow(lab, type, "    ${shortName(type)}", list, cur, selLab, selType, row)
+                    row++
+                }
+            }
         }
+    }
+
+    private fun addRow(row: Int) {
+        names.rowConstraints += RowConstraints(ROW_H)
+        body.rowConstraints += RowConstraints(ROW_H)
+    }
+
+    private fun typesForLabel(base: rs530anim.anim.AnimBase, label: Int): List<Int> {
+        val found = LinkedHashSet<Int>()
+        for (i in base.types.indices) {
+            if (label in base.bones[i]) found += base.types[i]
+        }
+        return CHANNELS.filter { it in found }
+    }
+
+    private fun groupRow(
+        label: Int,
+        primary: Int,
+        types: List<Int>,
+        open: Boolean,
+        list: List<AnimFrame>,
+        cur: Int,
+        selLab: Int?,
+        row: Int,
+    ) {
+        val mark = if (open) "−" else "+"
+        val extra = types.joinToString(" ") { shortName(it) }
+        val title = "$mark  vskin $label"
+        val name = headerCell(title, NAME_W, selected = selLab == label)
+        name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
+            if (open) {
+                expanded.remove(label)
+            } else {
+                expanded += label
+            }
+            if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, primary)
+            else refresh()
+        }
+        Tooltip.install(name, Tooltip("vskin $label  $extra"))
+        names.add(name, 0, row)
+        fillValues(label, primary, list, cur, selLab == label, row)
     }
 
     private fun colOf(frame: Int, axis: Int): Int = frame * 3 + axis
@@ -217,6 +267,17 @@ class TimelineBar(
             if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, type)
         }
         names.add(name, 0, row)
+        fillValues(label, type, list, cur, active, row)
+    }
+
+    private fun fillValues(
+        label: Int,
+        type: Int,
+        list: List<AnimFrame>,
+        cur: Int,
+        active: Boolean,
+        row: Int,
+    ) {
         val def = if (type == TransformType.SCALE) 128 else 0
         list.forEachIndexed { i, frame ->
             val values = frame.valuesForLabel(label, type) ?: Triple(def, def, def)
@@ -326,10 +387,18 @@ class TimelineBar(
     }
 
     companion object {
-        private const val NAME_W = 110.0
+        private const val NAME_W = 120.0
         private const val AXIS_W = 36.0
         private const val ROW_H = 22.0
         private const val HEADER_H = 44.0
         private const val PANE = "-fx-background: #1e1e22; -fx-background-color: #1e1e22;"
+        private val CHANNELS = listOf(TransformType.TRANSLATE, TransformType.ROTATE, TransformType.SCALE)
+
+        private fun shortName(type: Int): String = when (type) {
+            TransformType.TRANSLATE -> "pos"
+            TransformType.ROTATE -> "rot"
+            TransformType.SCALE -> "scl"
+            else -> TransformType.nameOf(type)
+        }
     }
 }
