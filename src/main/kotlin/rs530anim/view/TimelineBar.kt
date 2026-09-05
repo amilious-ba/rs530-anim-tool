@@ -8,6 +8,7 @@ import javafx.scene.control.ScrollPane
 import javafx.scene.control.TextField
 import javafx.scene.control.Tooltip
 import javafx.scene.input.KeyCode
+import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.ColumnConstraints
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
@@ -34,6 +35,7 @@ class TimelineBar(
     private val selectedType: () -> Int,
     private val onSeek: (Int) -> Unit,
     private val onPick: (frame: Int, label: Int, type: Int) -> Unit,
+    private val onClearLabel: () -> Unit = {},
     private val onPlayToggle: () -> Unit,
     private val onFirst: () -> Unit,
     private val onPrev: () -> Unit,
@@ -136,6 +138,17 @@ class TimelineBar(
         bodyScroll.hvalueProperty().addListener { _, _, _ -> syncFreeze() }
         bodyScroll.viewportBoundsProperty().addListener { _, _, _ -> syncFreeze() }
         body.layoutBoundsProperty().addListener { _, _, _ -> syncFreeze() }
+        fun wheelToBody(e: ScrollEvent) {
+            val viewH = bodyScroll.viewportBounds.height
+            val range = (body.layoutBounds.height - viewH).coerceAtLeast(1.0)
+            bodyScroll.vvalue = (bodyScroll.vvalue - e.deltaY / range).coerceIn(0.0, 1.0)
+            e.consume()
+        }
+        namePane.addEventHandler(ScrollEvent.SCROLL) { wheelToBody(it) }
+        names.addEventHandler(ScrollEvent.SCROLL) { wheelToBody(it) }
+        sheet.addEventFilter(ScrollEvent.SCROLL) { e ->
+            if (e.x < NAME_W) wheelToBody(e)
+        }
     }
 
     fun setPlaying(playing: Boolean) {
@@ -212,7 +225,11 @@ class TimelineBar(
     private fun groupHeader(label: Int, types: List<Int>, selLab: Int?, row: Int) {
         val extra = types.joinToString(" ") { shortName(it) }
         val name = headerCell("vskin $label", NAME_W, selected = selLab == label)
-        Tooltip.install(name, Tooltip("vskin $label  $extra"))
+        Tooltip.install(name, Tooltip("vskin $label  $extra  · click to select/deselect"))
+        name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
+            if (selLab == label) onClearLabel()
+            else if (frames().isNotEmpty()) onPick(current().coerceAtLeast(0), label, types.firstOrNull() ?: TransformType.ROTATE)
+        }
         names.add(name, 0, row)
         val span = (frames().size * 3).coerceAtLeast(1)
         val spacer = Rectangle(AXIS_W * span, ROW_H, Color.rgb(24, 24, 28))
@@ -259,7 +276,8 @@ class TimelineBar(
         val active = selLab == label && selType == type
         val name = headerCell(title, NAME_W, selected = active)
         name.addEventHandler(MouseEvent.MOUSE_CLICKED) {
-            if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, type)
+            if (selLab == label && selType == type) onClearLabel()
+            else if (list.isNotEmpty()) onPick(cur.coerceIn(0, list.lastIndex), label, type)
         }
         names.add(name, 0, row)
         fillValues(label, type, list, cur, active, row)

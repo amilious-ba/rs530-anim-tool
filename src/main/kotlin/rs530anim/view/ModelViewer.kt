@@ -41,6 +41,7 @@ import rs530anim.extras.SeqExtras
 import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyCodeCombination
 import javafx.scene.input.KeyCombination
+import javafx.scene.input.KeyEvent
 import javafx.scene.input.MouseButton
 import javafx.scene.input.ScrollEvent
 import javafx.scene.layout.BorderPane
@@ -228,6 +229,14 @@ class ModelViewer : Application() {
         var labels = model.uniqueVertexLabels()
         var pickedLabel: Int? = labels.firstOrNull()
         fun selectedLabel(): Int? = pickedLabel
+        fun clearVskin() {
+            pickedLabel = null
+            pickedLabelUi.text = "no vskin"
+            showLabel(null)
+            gizmo.root.isVisible = false
+            refreshTimeline()
+            applyPose()
+        }
         val pickedLabelUi = Label(
             pickedLabel?.let { "vskin $it  (${model.vertexCountForLabel(it)} verts)" } ?: "no vskin",
         )
@@ -786,12 +795,20 @@ class ModelViewer : Application() {
                 return@setOnMouseReleased
             }
             if (e.button != MouseButton.PRIMARY || dragDist > 5.0) return@setOnMouseReleased
-            val pick = e.pickResult ?: return@setOnMouseReleased
-            val node = pick.intersectedNode as? MeshView ?: return@setOnMouseReleased
-            val faceMap = node.userData as? IntArray ?: return@setOnMouseReleased
+            val pick = e.pickResult
+            val node = pick?.intersectedNode as? MeshView
+            val faceMap = node?.userData as? IntArray
+            if (pick == null || node == null || faceMap == null) {
+                clearVskin()
+                return@setOnMouseReleased
+            }
             val local = pick.intersectedFace
             if (local < 0 || local >= faceMap.size) return@setOnMouseReleased
-            val lab = vskinOfFace(model, faceMap[local]) ?: return@setOnMouseReleased
+            val lab = vskinOfFace(model, faceMap[local])
+            if (lab == null || lab == pickedLabel) {
+                clearVskin()
+                return@setOnMouseReleased
+            }
             pickedLabel = lab
             pickedLabelUi.text = "vskin $lab  (${model.vertexCountForLabel(lab)} verts)"
             loadSlidersFromFrame()
@@ -823,6 +840,7 @@ class ModelViewer : Application() {
                 loadSlidersFromFrame()
                 applyPose()
             },
+            onClearLabel = { clearVskin() },
             onPlayToggle = { togglePlay() },
             onFirst = { seekFrame(0) },
             onPrev = { seekFrame(currentFrame - 1) },
@@ -1056,6 +1074,12 @@ class ModelViewer : Application() {
             val css = ModelViewer::class.java.getResource("/rs530anim/dark.css")
             if (css != null) sc.stylesheets += css.toExternalForm()
             sc.fill = Color.rgb(30, 30, 34)
+            sc.addEventHandler(KeyEvent.KEY_PRESSED) { e ->
+                if (e.code == KeyCode.ESCAPE) {
+                    clearVskin()
+                    e.consume()
+                }
+            }
         }
         if (seqFrames.isNotEmpty()) loadSlidersFromFrame()
         applyPose()
