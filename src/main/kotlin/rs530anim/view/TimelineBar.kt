@@ -156,6 +156,42 @@ class TimelineBar(
         playBtn.tooltip = javafx.scene.control.Tooltip(if (playing) "Pause" else "Play")
     }
 
+    fun markPlayhead(frame: Int) {
+        for (parent in arrayOf(head, body)) {
+            for (n in parent.children) {
+                val cell = n as? StackPane ?: continue
+                val f = cell.properties["tlFrame"] as? Int ?: continue
+                val kind = cell.properties["tlKind"] as? String ?: continue
+                val on = f == frame
+                val fill = cell.children.firstOrNull() as? Rectangle ?: continue
+                val label = cell.children.getOrNull(1) as? Label
+                when (kind) {
+                    "head", "axis" -> {
+                        fill.fill = if (on) Color.rgb(70, 88, 44) else Color.rgb(36, 36, 42)
+                        fill.stroke = if (on) Color.rgb(198, 224, 138) else Color.rgb(48, 48, 54)
+                        label?.textFill = if (on) Color.rgb(220, 230, 180) else Color.rgb(200, 200, 206)
+                    }
+                    "value" -> {
+                        val active = cell.properties["tlActive"] == true
+                        val value = cell.properties["tlValue"] as? Int ?: 0
+                        val def = cell.properties["tlDef"] as? Int ?: 0
+                        fill.fill = when {
+                            on && active -> Color.rgb(70, 88, 44)
+                            on -> Color.rgb(48, 56, 36)
+                            active -> Color.rgb(42, 42, 22)
+                            else -> Color.rgb(24, 24, 28)
+                        }
+                        label?.textFill = when {
+                            value != def -> Color.rgb(236, 210, 96)
+                            on -> Color.rgb(180, 190, 160)
+                            else -> Color.rgb(120, 120, 126)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun setEnabled(on: Boolean) {
         firstBtn.isDisable = !on
         prevBtn.isDisable = !on
@@ -237,6 +273,11 @@ class TimelineBar(
         body.add(spacer, 0, row, span, 1)
     }
 
+    private fun tagFrame(cell: StackPane, frame: Int, kind: String) {
+        cell.properties["tlFrame"] = frame
+        cell.properties["tlKind"] = kind
+    }
+
     private fun colOf(frame: Int, axis: Int): Int = frame * 3 + axis
 
     private fun headerFrames(list: List<AnimFrame>, delays: IntArray, cur: Int) {
@@ -244,6 +285,7 @@ class TimelineBar(
         list.forEachIndexed { i, _ ->
             val ticks = delays.getOrElse(i) { 5 }
             val cell = headerCell("f$i  ${ticks}t", AXIS_W * 3, playhead = i == cur, header = true)
+            tagFrame(cell, i, "head")
             Tooltip.install(cell, Tooltip("click seek · double-click edit ticks"))
             cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { e ->
                 if (e.clickCount >= 2) beginDelayEdit(cell, i, ticks) else onSeek(i)
@@ -257,6 +299,7 @@ class TimelineBar(
         list.forEachIndexed { i, _ ->
             for ((axis, name) in listOf(0 to "x", 1 to "y", 2 to "z")) {
                 val cell = headerCell(name, AXIS_W, playhead = i == cur, header = true)
+                tagFrame(cell, i, "axis")
                 cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { onSeek(i) }
                 head.add(cell, colOf(i, axis), 1)
             }
@@ -297,6 +340,10 @@ class TimelineBar(
             val parts = intArrayOf(values.first, values.second, values.third)
             parts.forEachIndexed { axis, value ->
                 val cell = valueCell(value, def, i == cur, active)
+                tagFrame(cell, i, "value")
+                cell.properties["tlActive"] = active
+                cell.properties["tlDef"] = def
+                cell.properties["tlValue"] = value
                 Tooltip.install(cell, Tooltip("double-click to edit  vskin $label ${TransformType.nameOf(type)}  f$i"))
                 cell.addEventHandler(MouseEvent.MOUSE_CLICKED) { e ->
                     if (e.clickCount >= 2) {

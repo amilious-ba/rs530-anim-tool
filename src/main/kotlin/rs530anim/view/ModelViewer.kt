@@ -337,6 +337,7 @@ class ModelViewer : Application() {
 
         var syncingSliders = false
         var refreshTimeline: () -> Unit = {}
+        var markPlayhead: (Int) -> Unit = {}
         var timelineStatus: (String) -> Unit = {}
         var timelinePlaying: (Boolean) -> Unit = {}
         var timelineEnabled: (Boolean) -> Unit = {}
@@ -412,7 +413,7 @@ class ModelViewer : Application() {
                     (baseId?.let { "   base $it" } ?: ""),
             )
             syncDeformedGeometry()
-            if (fullUi) refreshTimeline()
+            if (fullUi) refreshTimeline() else markPlayhead(currentFrame)
         }
         clearVskin = {
             pickedLabel = null
@@ -875,6 +876,7 @@ class ModelViewer : Application() {
             },
         )
         refreshTimeline = { timeline.refresh() }
+        markPlayhead = { timeline.markPlayhead(it) }
         timelineStatus = { timeline.status.text = it }
         timelinePlaying = { timeline.setPlaying(it) }
         timelineEnabled = { timeline.setEnabled(it) }
