@@ -10,6 +10,7 @@ class SeqType(
     val looptype: Int,
     val priority: Int,
     val replayoff: Int,
+    val tween: Boolean = false,
 ) {
     val length: Int get() = frames.size
 
@@ -24,6 +25,7 @@ class SeqType(
             var looptype = -1
             var priority = 5
             var replayoff = -1
+            var tween = false
             while (true) {
                 val op = b.g1()
                 if (op == 0) break
@@ -61,12 +63,13 @@ class SeqType(
                             }
                         }
                     }
-                    14, 15, 16 -> { }
+                    14, 16 -> { }
+                    15 -> tween = true
                     else -> error("unknown seq opcode $op at ${b.offset}")
                 }
             }
             if (looptype == -1) looptype = 0
-            return SeqType(id, frames, delays, looptype, priority, replayoff)
+            return SeqType(id, frames, delays, looptype, priority, replayoff, tween)
         }
     }
 }

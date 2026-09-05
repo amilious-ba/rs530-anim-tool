@@ -108,6 +108,7 @@ class ModelViewer : Application() {
         var seqIdLoaded = seqId
         var seqLoop = 0
         var seqPriority = 5
+        var seqTween = false
         var seqDelays = IntArray(0)
         var markBaseline: () -> Unit = {}
         var pushHist: () -> Unit = {}
@@ -122,7 +123,8 @@ class ModelViewer : Application() {
                     seqDelays = seq.delays
                     seqLoop = seq.looptype
                     seqPriority = seq.priority
-                    println("seq $seqId frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id}")
+                    seqTween = seq.tween
+                    println("seq $seqId frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id} tween=${seq.tween}")
                 }
             } catch (e: Exception) {
                 System.err.println("seq $seqId not loaded: ${e.message}")
@@ -136,8 +138,9 @@ class ModelViewer : Application() {
                     seqDelays = seq.delays
                     seqLoop = seq.looptype
                     seqPriority = seq.priority
+                    seqTween = seq.tween
                     seqIdLoaded = id
-                    println("seq $id frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id}")
+                    println("seq $id frames=${seq.length} base=${seqFrames.firstOrNull()?.base?.id} tween=${seq.tween}")
                 }
                 markBaseline()
                 true
@@ -389,7 +392,7 @@ class ModelViewer : Application() {
             if (seqFrames.isNotEmpty()) {
                 currentFrame = frameSlider.value.toInt().coerceIn(0, seqFrames.lastIndex)
                 try {
-                    if (playing && seqFrames.size > 1) {
+                    if (playing && seqTween && seqFrames.size > 1) {
                         val delay = seqDelays.getOrElse(currentFrame) { 5 }.coerceAtLeast(1)
                         val delayNs = delay * 20_000_000L
                         val step = if (delayNs <= 0L) 0 else ((frameElapsedNs * delay) / delayNs).toInt().coerceIn(0, delay - 1)
