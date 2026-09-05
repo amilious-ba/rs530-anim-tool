@@ -335,6 +335,7 @@ class ModelViewer : Application() {
         }
 
         var syncingSliders = false
+        var frameElapsedNs = 0L
         var refreshTimeline: () -> Unit = {}
         var markPlayhead: (Int) -> Unit = {}
         var timelineStatus: (String) -> Unit = {}
@@ -532,7 +533,6 @@ class ModelViewer : Application() {
             }
         }
         var accNs = 0L
-        var frameElapsedNs = 0L
         val timer = object : AnimationTimer() {
             override fun handle(now: Long) {
                 if (!playing || seqFrames.isEmpty()) return
